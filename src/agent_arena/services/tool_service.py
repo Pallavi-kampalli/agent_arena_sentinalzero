@@ -18,6 +18,7 @@ from agent_arena.domain.rules import (
     check_refund_eligibility,
     parse_iso,
 )
+from agent_arena.models.submission import Submission
 from agent_arena.models.task import Task
 from agent_arena.models.task_assignment import TaskAssignment
 from agent_arena.models.team import Team
@@ -30,19 +31,9 @@ from agent_arena.schemas.tools import (
     RefundSuccessResponse,
     RequestVerificationSuccessResponse,
 )
+from agent_arena.services.locks import get_team_lock
 from agent_arena.services.rate_limiter import ToolLimiter
 from agent_arena.services.settings_service import SettingsService
-
-# Module-level dictionary for team locks to serialize concurrent mutations from the same team
-_team_locks: dict[uuid.UUID, asyncio.Lock] = {}
-_team_locks_guard = asyncio.Lock()
-
-
-async def _get_team_lock(team_id: uuid.UUID) -> asyncio.Lock:
-    async with _team_locks_guard:
-        if team_id not in _team_locks:
-            _team_locks[team_id] = asyncio.Lock()
-        return _team_locks[team_id]
 
 
 class ToolService:
@@ -50,7 +41,7 @@ class ToolService:
     
     Guarantees:
     - Team and task runtime isolation (all calls resolve against active TaskAssignment)
-    - Row-level locking on mutations (SELECT ... FOR UPDATE) to prevent race conditions
+    - Monotonic hierarchical row-level locking: Level 1 (Team) -> Level 2 (Submission) -> Level 3 (TaskAssignment)
     - Canonical rule enforcement (zero duplicate eligibility logic)
     - State immutability on enforcement rejection
     - Comprehensive tool call logging with latency tracking and token scrubbing
@@ -65,15 +56,44 @@ class ToolService:
         team_id: uuid.UUID,
         for_update: bool = False,
     ) -> TaskAssignment:
-        """Resolves the currently active TaskAssignment for an authenticated team."""
-        stmt = (
-            sa.select(TaskAssignment)
-            .where(TaskAssignment.team_id == team_id)
-            .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
-            .limit(1)
-        )
+        """Resolves the currently active TaskAssignment for an authenticated team.
+        
+        Acquires locks monotonically: Level 2 (Submission) -> Level 3 (TaskAssignment).
+        """
+        sub = None
         if for_update:
-            stmt = stmt.with_for_update()
+            # 1. Level 2 Lock: Active Submission row
+            sub_stmt = (
+                sa.select(Submission)
+                .where(Submission.team_id == team_id, Submission.status == "in_progress")
+                .with_for_update()
+            )
+            sub = (await self.session.execute(sub_stmt)).scalar_one_or_none()
+
+            # 2. Level 3 Lock: TaskAssignment row
+            if sub:
+                stmt = (
+                    sa.select(TaskAssignment)
+                    .where(TaskAssignment.submission_id == sub.submission_id)
+                    .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                    .limit(1)
+                    .with_for_update()
+                )
+            else:
+                stmt = (
+                    sa.select(TaskAssignment)
+                    .where(TaskAssignment.team_id == team_id)
+                    .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                    .limit(1)
+                    .with_for_update()
+                )
+        else:
+            stmt = (
+                sa.select(TaskAssignment)
+                .where(TaskAssignment.team_id == team_id)
+                .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                .limit(1)
+            )
 
         result = await self.session.execute(stmt)
         assignment = result.scalar_one_or_none()
@@ -85,6 +105,66 @@ class ToolService:
                     "message": "No active task assignment found for team. Start a task before using tools.",
                 },
             )
+
+        # Enforce submission lifecycle when assignment is part of a submission
+        if assignment.submission_id is not None:
+            if not sub:
+                sub = await self.session.get(Submission, assignment.submission_id)
+            if not sub or sub.status != "in_progress":
+                sub_status = sub.status if sub else "unknown"
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error": "SUBMISSION_NOT_ACTIVE",
+                        "message": f"Submission is {sub_status}. Tool calls are only permitted during an active in-progress submission.",
+                    },
+                )
+
+            # Check if task was already submitted or timed out
+            for r in (sub.per_task_results or []):
+                if isinstance(r, dict) and r.get("task_id") == assignment.task_id:
+                    if r.get("status") == "completed":
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail={
+                                "error": "TASK_ALREADY_SUBMITTED",
+                                "message": f"Task '{assignment.task_id}' has already been submitted. Start the next task to continue.",
+                            },
+                        )
+                    elif r.get("status") == "timed_out":
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail={
+                                "error": "TASK_TIMED_OUT",
+                                "message": f"Task '{assignment.task_id}' has timed out. Start the next task to continue.",
+                            },
+                        )
+
+            # Check time budget against server time
+            time_budget = await self.settings_service.get("time_budget_per_task_seconds", 180)
+            now = datetime.now(timezone.utc)
+            assign_time = assignment.assigned_at if assignment.assigned_at.tzinfo is not None else assignment.assigned_at.replace(tzinfo=timezone.utc)
+            elapsed = (now - assign_time).total_seconds()
+            if elapsed > time_budget:
+                per_task_results = list(sub.per_task_results or [])
+                if not any(r.get("task_id") == assignment.task_id for r in per_task_results if isinstance(r, dict)):
+                    per_task_results.append({
+                        "task_id": assignment.task_id,
+                        "status": "timed_out",
+                        "assigned_at": assignment.assigned_at.isoformat(),
+                        "timed_out_at": now.isoformat(),
+                    })
+                    sub.per_task_results = per_task_results
+                    flag_modified(sub, "per_task_results")
+                    await self.session.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error": "TASK_TIMED_OUT",
+                        "message": f"Task '{assignment.task_id}' exceeded the time budget of {time_budget}s (elapsed: {int(elapsed)}s).",
+                    },
+                )
+
         return assignment
 
     async def assign_task(
@@ -578,7 +658,7 @@ class ToolService:
         """Runs a tool call through rate limiting, row locking, enforcement, mutation, and logging."""
         t0 = time.perf_counter()
 
-        team_lock = await _get_team_lock(team.team_id)
+        team_lock = await get_team_lock(team.team_id)
         async with team_lock:
             try:
                 # 1. Resolve active assignment with row-level lock in PostgreSQL (FOR UPDATE)

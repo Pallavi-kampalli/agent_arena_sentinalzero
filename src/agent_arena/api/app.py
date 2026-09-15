@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from agent_arena.api.middleware import BearerAuthMiddleware
 from agent_arena.api.routes.health import router as health_router
+from agent_arena.api.routes.submission import router as submission_router
+from agent_arena.api.routes.task import router as task_router
 from agent_arena.api.routes.team import router as team_router
 from agent_arena.api.routes.tools import router as tools_router
 from agent_arena.config import get_config
@@ -55,6 +57,8 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(team_router)
     app.include_router(tools_router)
+    app.include_router(submission_router)
+    app.include_router(task_router)
 
     return app
 
