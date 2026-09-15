@@ -1,0 +1,23 @@
+{
+  "submission_limit_per_team": 5,
+  "score_aggregation": "best",
+  "scoring_weights": {
+    "task_success": 0.45,
+    "policy": 0.15,
+    "robustness": 0.15,
+    "evidence": 0.10,
+    "calibration": 0.05,
+    "efficiency": 0.05,
+    "communication": 0.05
+  },
+  "hidden_task_count": 200,
+  "dev_task_count": 70,
+  "tool_call_budget_per_task": 40,
+  "time_budget_per_task_seconds": 180,
+  "competition_phase": "registration",
+  "competition_start_at": null,
+  "competition_end_at": null,
+  "allowed_llm_models": "*",
+  "rate_limit_tool_calls_per_min": 60,
+  "bearer_token_expiry_hours": null
+}
