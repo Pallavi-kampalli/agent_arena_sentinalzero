@@ -1,12 +1,43 @@
 import copy
-from datetime import datetime, timedelta, timezone
 import random
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from agent_arena.world.policies import POLICIES
 
-FIRST_NAMES = ["Alex", "Jordan", "Taylor", "Morgan", "Sam", "Chris", "Casey", "Riley", "Avery", "Jamie", "Elena", "Marcus", "Priya", "Carlos", "Yuki"]
-LAST_NAMES = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Chen", "Patel", "Kim", "Tanaka", "Muller"]
+FIRST_NAMES = [
+    "Alex",
+    "Jordan",
+    "Taylor",
+    "Morgan",
+    "Sam",
+    "Chris",
+    "Casey",
+    "Riley",
+    "Avery",
+    "Jamie",
+    "Elena",
+    "Marcus",
+    "Priya",
+    "Carlos",
+    "Yuki",
+]
+LAST_NAMES = [
+    "Smith",
+    "Johnson",
+    "Williams",
+    "Brown",
+    "Jones",
+    "Garcia",
+    "Miller",
+    "Davis",
+    "Rodriguez",
+    "Chen",
+    "Patel",
+    "Kim",
+    "Tanaka",
+    "Muller",
+]
 TIERS = ["starter", "pro", "enterprise"]
 REGIONS = ["NA", "EU", "APAC"]
 PLANS = [
@@ -23,7 +54,7 @@ class WorldGenerator:
     def __init__(self, seed: int = 42):
         self.seed = seed
         self.rng = random.Random(seed)
-        self.current_date = datetime(2026, 9, 15, 0, 0, 0, tzinfo=timezone.utc)
+        self.current_date = datetime(2026, 9, 15, 0, 0, 0, tzinfo=UTC)
         # Seed-dependent ID offset ensures disjoint entity spaces across seeds (PRD §8)
         # Seed 42 preserves baseline IDs (CUS-1001, TXN-20001) for unit test consistency
         self.id_offset = 0 if seed == 42 else seed * 1000
@@ -58,16 +89,18 @@ class WorldGenerator:
             fname = self.rng.choice(FIRST_NAMES)
             lname = self.rng.choice(LAST_NAMES)
             cust_id = f"CUS-{1000 + self.id_offset + i}"
-            customers.append({
-                "id": cust_id,
-                "name": f"{fname} {lname}",
-                "email": f"{fname.lower()}.{lname.lower()}{i}@example.com",
-                "tier": self.rng.choice(TIERS),
-                "region": self.rng.choice(REGIONS),
-                "verification_status": self.rng.choice(["verified", "verified", "verified", "pending"]),
-                "account_status": "active",
-                "created_at": (self.current_date - timedelta(days=self.rng.randint(60, 500))).isoformat(),
-            })
+            customers.append(
+                {
+                    "id": cust_id,
+                    "name": f"{fname} {lname}",
+                    "email": f"{fname.lower()}.{lname.lower()}{i}@example.com",
+                    "tier": self.rng.choice(TIERS),
+                    "region": self.rng.choice(REGIONS),
+                    "verification_status": self.rng.choice(["verified", "verified", "verified", "pending"]),
+                    "account_status": "active",
+                    "created_at": (self.current_date - timedelta(days=self.rng.randint(60, 500))).isoformat(),
+                }
+            )
         return customers
 
     def _generate_transactions(
@@ -85,23 +118,25 @@ class WorldGenerator:
             tx_id = f"TXN-{20000 + self.id_offset + i}"
 
             # 10% chance of active chargeback hold
-            has_chargeback = (i % 10 == 0)
+            has_chargeback = i % 10 == 0
 
-            transactions.append({
-                "id": tx_id,
-                "customer_id": cust["id"],
-                "amount": amount,
-                "currency": "USD",
-                "date": tx_date.isoformat(),
-                "status": "completed",
-                "description": f"Service charge for invoice INV-{invoice_num}",
-                "invoice_id": f"INV-{invoice_num}",
-                "chargeback_status": "investigation_active" if has_chargeback else "none",
-                "under_fraud_investigation": has_chargeback,
-                "refund_status": "none",
-                "refunded_amount": 0.0,
-                "payment_method": "credit_card_visa",
-            })
+            transactions.append(
+                {
+                    "id": tx_id,
+                    "customer_id": cust["id"],
+                    "amount": amount,
+                    "currency": "USD",
+                    "date": tx_date.isoformat(),
+                    "status": "completed",
+                    "description": f"Service charge for invoice INV-{invoice_num}",
+                    "invoice_id": f"INV-{invoice_num}",
+                    "chargeback_status": "investigation_active" if has_chargeback else "none",
+                    "under_fraud_investigation": has_chargeback,
+                    "refund_status": "none",
+                    "refunded_amount": 0.0,
+                    "payment_method": "credit_card_visa",
+                }
+            )
         return transactions
 
     def _generate_subscriptions(
@@ -121,19 +156,21 @@ class WorldGenerator:
             # Some annual plans have an approved exception recorded
             has_exception = (i % 7 == 0) if is_annual else False
 
-            subscriptions.append({
-                "id": f"SUB-{5000 + self.id_offset + i}",
-                "customer_id": cust["id"],
-                "plan": plan_name,
-                "billing_cycle": cycle,
-                "amount": price,
-                "status": "active",
-                "start_date": start_date.isoformat(),
-                "renewal_date": (start_date + timedelta(days=365 if is_annual else 30)).isoformat(),
-                "lock_in_until": lock_in_until,
-                "has_approved_exception": has_exception,
-                "has_unresolved_dispute": False,
-            })
+            subscriptions.append(
+                {
+                    "id": f"SUB-{5000 + self.id_offset + i}",
+                    "customer_id": cust["id"],
+                    "plan": plan_name,
+                    "billing_cycle": cycle,
+                    "amount": price,
+                    "status": "active",
+                    "start_date": start_date.isoformat(),
+                    "renewal_date": (start_date + timedelta(days=365 if is_annual else 30)).isoformat(),
+                    "lock_in_until": lock_in_until,
+                    "has_approved_exception": has_exception,
+                    "has_unresolved_dispute": False,
+                }
+            )
         return subscriptions
 
     def _generate_historical_cases(
@@ -145,7 +182,7 @@ class WorldGenerator:
         for i in range(1, 40):
             cust = self.rng.choice(customers)
             case_date = self.current_date - timedelta(days=self.rng.randint(15, 120))
-            is_wrong = (i % 4 == 0)  # 25% of cases had incorrect agent actions (PS §3, §6)
+            is_wrong = i % 4 == 0  # 25% of cases had incorrect agent actions (PS §3, §6)
 
             category = self.rng.choice(["refund", "duplicate_payment", "cancellation", "delivery_dispute"])
             if is_wrong:
@@ -158,17 +195,19 @@ class WorldGenerator:
                 notes = "Previous agent notes: Verified account credentials and advised customer on billing schedule."
                 resolution = "resolved_explanation"
 
-            cases.append({
-                "case_id": f"CASE-{8000 + self.id_offset + i}",
-                "customer_id": cust["id"],
-                "date": case_date.isoformat(),
-                "category": category,
-                "resolution": resolution,
-                "agent_id": f"AGT-{100 + (i % 5)}",
-                "notes": notes,
-                "was_correct": not is_wrong,
-                "evidence_used": ["DOC-1001"] if not is_wrong else ["DOC-0991"],
-            })
+            cases.append(
+                {
+                    "case_id": f"CASE-{8000 + self.id_offset + i}",
+                    "customer_id": cust["id"],
+                    "date": case_date.isoformat(),
+                    "category": category,
+                    "resolution": resolution,
+                    "agent_id": f"AGT-{100 + (i % 5)}",
+                    "notes": notes,
+                    "was_correct": not is_wrong,
+                    "evidence_used": ["DOC-1001"] if not is_wrong else ["DOC-0991"],
+                }
+            )
         return cases
 
     def _generate_supporting_documents(self) -> list[dict[str, Any]]:

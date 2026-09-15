@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
+
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +12,7 @@ from agent_arena.schemas.settings import validate_setting_value
 
 class SettingsService:
     """Manages competition-level settings with validation, caching, and audit logging.
-    
+
     All competition-tunable parameters MUST be read from this service rather than
     being hardcoded in any downstream modules (PRD §2.2, §12).
     """
@@ -20,7 +21,7 @@ class SettingsService:
     _defaults: dict[str, Any] = {}
     _initialized: bool = False
 
-    def __init__(self, session: Optional[AsyncSession] = None):
+    def __init__(self, session: AsyncSession | None = None):
         self.session = session
         self._load_defaults_file()
 
@@ -50,9 +51,7 @@ class SettingsService:
             return self._cache[key]
 
         if self.session is not None:
-            result = await self.session.execute(
-                sa.select(Setting).where(Setting.key == key)
-            )
+            result = await self.session.execute(sa.select(Setting).where(Setting.key == key))
             setting = result.scalar_one_or_none()
             if setting is not None:
                 self._cache[key] = setting.value
@@ -79,9 +78,7 @@ class SettingsService:
             raise ValueError("Database session required to set a setting")
 
         # Get existing value for audit and phase-transition validation
-        result = await self.session.execute(
-            sa.select(Setting).where(Setting.key == key)
-        )
+        result = await self.session.execute(sa.select(Setting).where(Setting.key == key))
         existing_setting = result.scalar_one_or_none()
         old_value = existing_setting.value if existing_setting else self._defaults.get(key)
 

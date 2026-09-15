@@ -1,20 +1,21 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class TeamRegisterRequest(BaseModel):
     team_name: str = Field(..., min_length=2, max_length=100)
-    members: Optional[Any] = None
-    github_repo_url: Optional[str] = None
+    members: Any | None = None
+    github_repo_url: str | None = None
 
 
 class TeamResponse(BaseModel):
     team_id: uuid.UUID
     team_name: str
-    members: Optional[Any] = None
-    github_repo_url: Optional[str] = None
+    members: Any | None = None
+    github_repo_url: str | None = None
     token_version: int
     status: str
     created_at: datetime

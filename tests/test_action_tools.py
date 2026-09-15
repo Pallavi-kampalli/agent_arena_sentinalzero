@@ -1,6 +1,6 @@
 import pytest
-from httpx import AsyncClient
 import sqlalchemy as sa
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.models.task import Task
@@ -27,85 +27,97 @@ async def setup_action_world(db_session: AsyncSession):
     world = generate_world(seed=42)
 
     # Inject specific controlled test fixtures into world state
-    world["customers"].append({
-        "id": "CUS-ACTION-01",
-        "name": "Action User",
-        "tier": "pro",
-        "region": "NA",
-        "verification_status": "verified",
-        "account_status": "active",
-        "created_at": "2026-01-01T00:00:00Z",
-    })
+    world["customers"].append(
+        {
+            "id": "CUS-ACTION-01",
+            "name": "Action User",
+            "tier": "pro",
+            "region": "NA",
+            "verification_status": "verified",
+            "account_status": "active",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    )
 
     # 1. Eligible transaction (3 days ago, amount $100)
-    world["transactions"].append({
-        "id": "TXN-ELIGIBLE-01",
-        "customer_id": "CUS-ACTION-01",
-        "amount": 100.0,
-        "currency": "USD",
-        "date": "2026-09-12T00:00:00Z",
-        "status": "completed",
-        "chargeback_status": "none",
-        "under_fraud_investigation": False,
-        "refund_status": "none",
-        "refunded_amount": 0.0,
-    })
+    world["transactions"].append(
+        {
+            "id": "TXN-ELIGIBLE-01",
+            "customer_id": "CUS-ACTION-01",
+            "amount": 100.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
 
     # 2. Ineligible transaction (chargeback hold active)
-    world["transactions"].append({
-        "id": "TXN-HOLD-01",
-        "customer_id": "CUS-ACTION-01",
-        "amount": 250.0,
-        "currency": "USD",
-        "date": "2026-09-10T00:00:00Z",
-        "status": "completed",
-        "chargeback_status": "investigation_active",
-        "under_fraud_investigation": True,
-        "refund_status": "none",
-        "refunded_amount": 0.0,
-    })
+    world["transactions"].append(
+        {
+            "id": "TXN-HOLD-01",
+            "customer_id": "CUS-ACTION-01",
+            "amount": 250.0,
+            "currency": "USD",
+            "date": "2026-09-10T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "investigation_active",
+            "under_fraud_investigation": True,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
 
     # 3. Ineligible transaction (outside 30-day window: 60 days ago)
-    world["transactions"].append({
-        "id": "TXN-EXPIRED-01",
-        "customer_id": "CUS-ACTION-01",
-        "amount": 50.0,
-        "currency": "USD",
-        "date": "2026-07-01T00:00:00Z",
-        "status": "completed",
-        "chargeback_status": "none",
-        "under_fraud_investigation": False,
-        "refund_status": "none",
-        "refunded_amount": 0.0,
-    })
+    world["transactions"].append(
+        {
+            "id": "TXN-EXPIRED-01",
+            "customer_id": "CUS-ACTION-01",
+            "amount": 50.0,
+            "currency": "USD",
+            "date": "2026-07-01T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
 
     # 4. Eligible subscription (monthly plan, no lock-in)
-    world["subscriptions"].append({
-        "id": "SUB-MONTHLY-01",
-        "customer_id": "CUS-ACTION-01",
-        "plan": "pro_monthly",
-        "billing_cycle": "monthly",
-        "amount": 99.0,
-        "status": "active",
-        "start_date": "2026-08-01T00:00:00Z",
-        "lock_in_until": None,
-        "has_approved_exception": False,
-        "has_unresolved_dispute": False,
-    })
+    world["subscriptions"].append(
+        {
+            "id": "SUB-MONTHLY-01",
+            "customer_id": "CUS-ACTION-01",
+            "plan": "pro_monthly",
+            "billing_cycle": "monthly",
+            "amount": 99.0,
+            "status": "active",
+            "start_date": "2026-08-01T00:00:00Z",
+            "lock_in_until": None,
+            "has_approved_exception": False,
+            "has_unresolved_dispute": False,
+        }
+    )
 
     # 5. Ineligible subscription (annual plan in lock-in without exception)
-    world["subscriptions"].append({
-        "id": "SUB-LOCKIN-01",
-        "customer_id": "CUS-ACTION-01",
-        "plan": "pro_annual",
-        "billing_cycle": "annual",
-        "amount": 990.0,
-        "status": "active",
-        "start_date": "2026-03-01T00:00:00Z",
-        "lock_in_until": "2027-03-01T00:00:00Z",
-        "has_approved_exception": False,
-        "has_unresolved_dispute": False,
-    })
+    world["subscriptions"].append(
+        {
+            "id": "SUB-LOCKIN-01",
+            "customer_id": "CUS-ACTION-01",
+            "plan": "pro_annual",
+            "billing_cycle": "annual",
+            "amount": 990.0,
+            "status": "active",
+            "start_date": "2026-03-01T00:00:00Z",
+            "lock_in_until": "2027-03-01T00:00:00Z",
+            "has_approved_exception": False,
+            "has_unresolved_dispute": False,
+        }
+    )
 
     task = Task(
         task_id="TASK-ACTION-001",
@@ -134,8 +146,11 @@ async def setup_action_world(db_session: AsyncSession):
 # Issue Refund Tests
 # =============================================================================
 
+
 @pytest.mark.asyncio
-async def test_issue_refund_success_and_state_mutation(client: AsyncClient, setup_action_world, db_session: AsyncSession):
+async def test_issue_refund_success_and_state_mutation(
+    client: AsyncClient, setup_action_world, db_session: AsyncSession
+):
     """Verify eligible refund mutates world state, records tool log, and returns HTTP 200 refunded."""
     token = setup_action_world["token"]
     assignment_id = setup_action_world["assignment"].id
@@ -160,16 +175,16 @@ async def test_issue_refund_success_and_state_mutation(client: AsyncClient, setu
     assert tx["refunded_amount"] == 100.0
 
     # Verify tool log recorded
-    log = (await db_session.execute(
-        sa.select(ToolCallLog).where(ToolCallLog.tool_name == "issue_refund")
-    )).scalar_one()
+    log = (await db_session.execute(sa.select(ToolCallLog).where(ToolCallLog.tool_name == "issue_refund"))).scalar_one()
     assert log.was_enforcement_rejection is False
     assert log.latency_ms > 0
     assert "Bearer" not in str(log.request_payload)
 
 
 @pytest.mark.asyncio
-async def test_issue_refund_already_refunded_rejected(client: AsyncClient, setup_action_world, db_session: AsyncSession):
+async def test_issue_refund_already_refunded_rejected(
+    client: AsyncClient, setup_action_world, db_session: AsyncSession
+):
     """Verify refunding an already refunded transaction returns HTTP 200 INELIGIBLE with zero state change."""
     token = setup_action_world["token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -196,11 +211,17 @@ async def test_issue_refund_already_refunded_rejected(client: AsyncClient, setup
     assert data["policy_ref"] == "DOC-1001"
 
     # Verify log marked as enforcement rejection
-    logs = (await db_session.execute(
-        sa.select(ToolCallLog)
-        .where(ToolCallLog.tool_name == "issue_refund")
-        .order_by(ToolCallLog.created_at.desc())
-    )).scalars().all()
+    logs = (
+        (
+            await db_session.execute(
+                sa.select(ToolCallLog)
+                .where(ToolCallLog.tool_name == "issue_refund")
+                .order_by(ToolCallLog.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     latest_log = logs[0]
     assert latest_log.was_enforcement_rejection is True
 
@@ -266,8 +287,11 @@ async def test_issue_refund_unknown_transaction_returns_404(client: AsyncClient,
 # Cancel Subscription Tests
 # =============================================================================
 
+
 @pytest.mark.asyncio
-async def test_cancel_subscription_success_and_lock_in_rejection(client: AsyncClient, setup_action_world, db_session: AsyncSession):
+async def test_cancel_subscription_success_and_lock_in_rejection(
+    client: AsyncClient, setup_action_world, db_session: AsyncSession
+):
     """Verify monthly plan cancels successfully, while annual in lock-in is rejected."""
     token = setup_action_world["token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -296,6 +320,7 @@ async def test_cancel_subscription_success_and_lock_in_rejection(client: AsyncCl
 # =============================================================================
 # Escalate Case Tests (Evidence Grounding)
 # =============================================================================
+
 
 @pytest.mark.asyncio
 async def test_escalate_case_grounded_vs_ungrounded(client: AsyncClient, setup_action_world):
@@ -334,6 +359,7 @@ async def test_escalate_case_grounded_vs_ungrounded(client: AsyncClient, setup_a
 # =============================================================================
 # Request Verification Tests (Safe Fallback)
 # =============================================================================
+
 
 @pytest.mark.asyncio
 async def test_request_verification_safe_fallback(client: AsyncClient, setup_action_world, db_session: AsyncSession):

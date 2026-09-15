@@ -1,5 +1,7 @@
 import copy
+
 import pytest
+
 from agent_arena.tasks.generator import TaskGenerator
 from agent_arena.tasks.validator import validate_task
 from agent_arena.world.generator import generate_world
@@ -59,7 +61,9 @@ def test_validate_task_ground_truth_drift(valid_task):
     """Verify rejection when stored ground truth contradicts derived ground truth."""
     corrupted = copy.deepcopy(valid_task)
     # Tamper with resolution
-    corrupted["ground_truth"]["expected_resolution"] = "deny" if valid_task["ground_truth"]["expected_resolution"] == "refund" else "refund"
+    corrupted["ground_truth"]["expected_resolution"] = (
+        "deny" if valid_task["ground_truth"]["expected_resolution"] == "refund" else "refund"
+    )
 
     is_valid, err = validate_task(corrupted)
     assert is_valid is False
@@ -72,22 +76,26 @@ def test_validate_task_ambiguous_conflicting_policies(valid_task):
     pols = corrupted["world_state_seed"]["policies"]
     # Find refund policies or add a duplicate with same updated_at
     ts = "2024-06-01T00:00:00Z"
-    pols.append({
-        "id": "DOC-CONFLICT-01",
-        "title": "Conflicting Policy 1",
-        "category": "refund",
-        "content": "Conflicting content A",
-        "updated_at": ts,
-        "is_active": True,
-    })
-    pols.append({
-        "id": "DOC-CONFLICT-02",
-        "title": "Conflicting Policy 2",
-        "category": "refund",
-        "content": "Conflicting content B",
-        "updated_at": ts,
-        "is_active": True,
-    })
+    pols.append(
+        {
+            "id": "DOC-CONFLICT-01",
+            "title": "Conflicting Policy 1",
+            "category": "refund",
+            "content": "Conflicting content A",
+            "updated_at": ts,
+            "is_active": True,
+        }
+    )
+    pols.append(
+        {
+            "id": "DOC-CONFLICT-02",
+            "title": "Conflicting Policy 2",
+            "category": "refund",
+            "content": "Conflicting content B",
+            "updated_at": ts,
+            "is_active": True,
+        }
+    )
 
     is_valid, err = validate_task(corrupted)
     assert is_valid is False
@@ -179,5 +187,3 @@ def test_validate_task_missing_refund_target_fails():
     assert is_valid is False
     assert "Unsolvable task" in err
     assert f"'{target_tx_id}'" in err
-
-

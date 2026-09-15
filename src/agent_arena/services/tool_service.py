@@ -1,16 +1,14 @@
-import asyncio
 import copy
-from datetime import datetime, timezone
 import time
-from typing import Any, Optional
 import uuid
+from datetime import UTC, datetime
+from typing import Any
 
-from fastapi import HTTPException, status
 import sqlalchemy as sa
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from agent_arena.domain.models import EligibilityResult
 from agent_arena.domain.rules import (
     apply_action_to_world,
     check_cancellation_eligibility,
@@ -38,7 +36,7 @@ from agent_arena.services.settings_service import SettingsService
 
 class ToolService:
     """Core tool execution runtime for all 10 SupportOps tools.
-    
+
     Guarantees:
     - Team and task runtime isolation (all calls resolve against active TaskAssignment)
     - Monotonic hierarchical row-level locking: Level 1 (Team) -> Level 2 (Submission) -> Level 3 (TaskAssignment)
@@ -57,7 +55,7 @@ class ToolService:
         for_update: bool = False,
     ) -> TaskAssignment:
         """Resolves the currently active TaskAssignment for an authenticated team.
-        
+
         Acquires locks monotonically: Level 2 (Submission) -> Level 3 (TaskAssignment).
         """
         sub = None
@@ -121,7 +119,7 @@ class ToolService:
                 )
 
             # Check if task was already submitted or timed out
-            for r in (sub.per_task_results or []):
+            for r in sub.per_task_results or []:
                 if isinstance(r, dict) and r.get("task_id") == assignment.task_id:
                     if r.get("status") == "completed":
                         raise HTTPException(
@@ -142,18 +140,24 @@ class ToolService:
 
             # Check time budget against server time
             time_budget = await self.settings_service.get("time_budget_per_task_seconds", 180)
-            now = datetime.now(timezone.utc)
-            assign_time = assignment.assigned_at if assignment.assigned_at.tzinfo is not None else assignment.assigned_at.replace(tzinfo=timezone.utc)
+            now = datetime.now(UTC)
+            assign_time = (
+                assignment.assigned_at
+                if assignment.assigned_at.tzinfo is not None
+                else assignment.assigned_at.replace(tzinfo=UTC)
+            )
             elapsed = (now - assign_time).total_seconds()
             if elapsed > time_budget:
                 per_task_results = list(sub.per_task_results or [])
                 if not any(r.get("task_id") == assignment.task_id for r in per_task_results if isinstance(r, dict)):
-                    per_task_results.append({
-                        "task_id": assignment.task_id,
-                        "status": "timed_out",
-                        "assigned_at": assignment.assigned_at.isoformat(),
-                        "timed_out_at": now.isoformat(),
-                    })
+                    per_task_results.append(
+                        {
+                            "task_id": assignment.task_id,
+                            "status": "timed_out",
+                            "assigned_at": assignment.assigned_at.isoformat(),
+                            "timed_out_at": now.isoformat(),
+                        }
+                    )
                     sub.per_task_results = per_task_results
                     flag_modified(sub, "per_task_results")
                     await self.session.commit()
@@ -171,12 +175,10 @@ class ToolService:
         self,
         team_id: uuid.UUID,
         task_id: str,
-        submission_id: Optional[uuid.UUID] = None,
+        submission_id: uuid.UUID | None = None,
     ) -> TaskAssignment:
         """Assigns a task to a team, copying tasks.world_state_seed to task_assignments.world_runtime_state."""
-        task_res = await self.session.execute(
-            sa.select(Task).where(Task.task_id == task_id)
-        )
+        task_res = await self.session.execute(sa.select(Task).where(Task.task_id == task_id))
         task = task_res.scalar_one_or_none()
         if not task:
             raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
@@ -188,7 +190,7 @@ class ToolService:
             team_id=team_id,
             task_id=task_id,
             submission_id=submission_id,
-            assigned_at=datetime.now(timezone.utc),
+            assigned_at=datetime.now(UTC),
             world_runtime_state=runtime_state,
         )
         self.session.add(assignment)
@@ -259,7 +261,7 @@ class ToolService:
                 retrieved.add(tx_ref["id"])
 
             # Check policy_ref from ineligibility response
-            if "policy_ref" in resp and resp["policy_ref"]:
+            if resp.get("policy_ref"):
                 retrieved.add(resp["policy_ref"])
 
         return retrieved
@@ -314,18 +316,20 @@ class ToolService:
                 # Snippet truncation
                 full_content = d.get("content", "")
                 snippet = full_content[:300] + ("..." if len(full_content) > 300 else "")
-                scored_docs.append((
-                    score,
-                    parse_iso(d.get("updated_at", "1970-01-01T00:00:00Z")),
-                    d["id"],
-                    {
-                        "id": d["id"],
-                        "title": d.get("title", ""),
-                        "snippet": snippet,
-                        "updated_at": d.get("updated_at", ""),
-                        "category": d.get("category", "general"),
-                    },
-                ))
+                scored_docs.append(
+                    (
+                        score,
+                        parse_iso(d.get("updated_at", "1970-01-01T00:00:00Z")),
+                        d["id"],
+                        {
+                            "id": d["id"],
+                            "title": d.get("title", ""),
+                            "snippet": snippet,
+                            "updated_at": d.get("updated_at", ""),
+                            "category": d.get("category", "general"),
+                        },
+                    )
+                )
 
         # Sort by score desc, then updated_at desc, then doc_id asc for deterministic tie-breaking
         scored_docs.sort(key=lambda x: (-x[0], -x[1].timestamp(), x[2]))
@@ -375,8 +379,8 @@ class ToolService:
         self,
         world_state: dict[str, Any],
         customer_id: str,
-        start_date: Optional[str],
-        end_date: Optional[str],
+        start_date: str | None,
+        end_date: str | None,
     ) -> dict[str, Any]:
         """Fetches customer transactions with optional inclusive date bounds."""
         # 1. Verify customer exists
@@ -397,8 +401,8 @@ class ToolService:
             try:
                 start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
                 if start_dt.tzinfo is None:
-                    start_dt = start_dt.replace(tzinfo=timezone.utc)
-                start_dt = start_dt.astimezone(timezone.utc)
+                    start_dt = start_dt.replace(tzinfo=UTC)
+                start_dt = start_dt.astimezone(UTC)
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -408,8 +412,8 @@ class ToolService:
             try:
                 end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
                 if end_dt.tzinfo is None:
-                    end_dt = end_dt.replace(tzinfo=timezone.utc)
-                end_dt = end_dt.astimezone(timezone.utc)
+                    end_dt = end_dt.replace(tzinfo=UTC)
+                end_dt = end_dt.astimezone(UTC)
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -419,7 +423,10 @@ class ToolService:
         if start_dt and end_dt and start_dt > end_dt:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail={"error": "INVALID_DATE_RANGE", "message": f"start_date '{start_date}' cannot be after end_date '{end_date}'."},
+                detail={
+                    "error": "INVALID_DATE_RANGE",
+                    "message": f"start_date '{start_date}' cannot be after end_date '{end_date}'.",
+                },
             )
 
         # 3. Filter customer transactions
@@ -490,9 +497,9 @@ class ToolService:
         transaction_id: str,
         amount: float,
         reason: str,
-    ) -> tuple[Optional[dict[str, Any]], dict[str, Any], bool]:
+    ) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
         """Enforces refund rules via canonical domain check.
-        
+
         Returns (mutated_world_state_or_None, response_dict, was_rejection).
         """
         result = check_refund_eligibility(world_state, transaction_id, amount, reason)
@@ -520,7 +527,9 @@ class ToolService:
             params={"transaction_id": transaction_id, "amount": amount, "reason": reason},
         )
         updated_tx = next(t for t in mutated["transactions"] if t.get("id") == transaction_id)
-        resp = RefundSuccessResponse(status=updated_tx.get("refund_status", "refunded"), transaction=updated_tx).model_dump()
+        resp = RefundSuccessResponse(
+            status=updated_tx.get("refund_status", "refunded"), transaction=updated_tx
+        ).model_dump()
         return mutated, resp, False
 
     def execute_cancel_subscription(
@@ -528,7 +537,7 @@ class ToolService:
         world_state: dict[str, Any],
         customer_id: str,
         subscription_id: str,
-    ) -> tuple[Optional[dict[str, Any]], dict[str, Any], bool]:
+    ) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
         """Enforces cancellation rules via canonical domain check."""
         cust_exists = any(c.get("id") == customer_id for c in world_state.get("customers", []) if isinstance(c, dict))
         if not cust_exists:
@@ -574,7 +583,7 @@ class ToolService:
         team: str,
         reason: str,
         retrieved_evidence_ids: set[str],
-    ) -> tuple[Optional[dict[str, Any]], dict[str, Any], bool]:
+    ) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
         """Enforces evidence grounding check for escalation."""
         result = check_escalation_validity(
             world_state=world_state,
@@ -604,7 +613,7 @@ class ToolService:
         world_state: dict[str, Any],
         customer_id: str,
         verification_type: str,
-    ) -> tuple[Optional[dict[str, Any]], dict[str, Any], bool]:
+    ) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
         """Safe fallback action; always succeeds when customer exists."""
         cust_exists = any(c.get("id") == customer_id for c in world_state.get("customers", []))
         if not cust_exists:
@@ -760,7 +769,7 @@ class ToolService:
                     response_payload=response_dict,
                     was_enforcement_rejection=was_rejection,
                     latency_ms=latency_ms,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
                 self.session.add(log_entry)
                 await self.session.commit()

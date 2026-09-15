@@ -1,18 +1,18 @@
-from logging.config import fileConfig
 import os
 import sys
+from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import Connection
+
+from alembic import context
 
 # Ensure src is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
+# Import all models to ensure metadata is populated
 from agent_arena.config import get_config
 from agent_arena.models.base import Base
-# Import all models to ensure metadata is populated
-import agent_arena.models
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

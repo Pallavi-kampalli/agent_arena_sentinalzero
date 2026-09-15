@@ -1,9 +1,13 @@
 import sys
+
 if sys.platform == "win32":
     import asyncio
+
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from collections.abc import AsyncGenerator
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from agent_arena.config import get_config
@@ -19,7 +23,7 @@ def get_engine(database_url: str | None = None):
         url = database_url or get_config().DATABASE_URL
         # Set connect_args / pool settings based on engine dialect
         is_sqlite = "sqlite" in url
-        engine_kwargs = {"echo": False, "future": True}
+        engine_kwargs: dict[str, Any] = {"echo": False, "future": True}
         if not is_sqlite:
             engine_kwargs.update(
                 {

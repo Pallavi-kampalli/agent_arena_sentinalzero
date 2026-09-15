@@ -1,10 +1,11 @@
 import hashlib
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any
+
 import jwt
-from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.config import get_config
 from agent_arena.models.team import Team
@@ -18,7 +19,7 @@ def hash_token(token: str) -> str:
 def create_bearer_token(
     team_id: uuid.UUID,
     token_version: int,
-    expiry_hours: Optional[int] = None,
+    expiry_hours: int | None = None,
 ) -> str:
     """Issues a cryptographically signed JWT bearer token for a team."""
     config = get_config()
@@ -45,9 +46,9 @@ def decode_bearer_token(token: str) -> dict[str, Any]:
 async def register_team(
     session: AsyncSession,
     team_name: str,
-    members: Optional[Any] = None,
-    github_repo_url: Optional[str] = None,
-    expiry_hours: Optional[int] = None,
+    members: Any | None = None,
+    github_repo_url: str | None = None,
+    expiry_hours: int | None = None,
 ) -> tuple[Team, str]:
     """Registers a new team, stores the hashed token, and returns the team and plaintext token."""
     team_id = uuid.uuid4()
@@ -73,7 +74,7 @@ async def register_team(
 async def regenerate_team_token(
     session: AsyncSession,
     team: Team,
-    expiry_hours: Optional[int] = None,
+    expiry_hours: int | None = None,
 ) -> str:
     """Bumps token_version, revoking previous tokens immediately, and issues a new token."""
     team.token_version += 1
@@ -86,7 +87,7 @@ async def regenerate_team_token(
 
 async def authenticate_bearer_token(session: AsyncSession, raw_token: str) -> Team:
     """Validates token signature, token_version, hash, and team status.
-    
+
     Always validates directly against the database to ensure immediate token revocation
     and immediate team suspension enforcement across all workers/processes (PRD §4, §11).
     Raises ValueError with specific message on failure.

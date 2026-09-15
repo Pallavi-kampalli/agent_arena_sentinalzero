@@ -1,7 +1,8 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ScoreAggregationEnum(str, Enum):
@@ -109,13 +110,11 @@ def validate_setting_value(key: str, value: Any, current_value: Any = None) -> A
             return validated.model_dump()
         raise ValueError("scoring_weights must be a dictionary with all 7 scoring dimensions")
 
-    elif key in {"hidden_task_count", "dev_task_count"}:
-        val = int(value)
-        if val < 1:
-            raise ValueError(f"{key} must be >= 1")
-        return val
-
-    elif key in {"tool_call_budget_per_task", "time_budget_per_task_seconds", "rate_limit_tool_calls_per_min"}:
+    elif key in {"hidden_task_count", "dev_task_count"} or key in {
+        "tool_call_budget_per_task",
+        "time_budget_per_task_seconds",
+        "rate_limit_tool_calls_per_min",
+    }:
         val = int(value)
         if val < 1:
             raise ValueError(f"{key} must be >= 1")

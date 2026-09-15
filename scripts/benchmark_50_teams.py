@@ -1,14 +1,13 @@
 import asyncio
 import copy
-from datetime import datetime, timezone
 import os
 import sys
 import time
 import uuid
 
 import httpx
-from httpx import ASGITransport
 import sqlalchemy as sa
+from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 if sys.platform == "win32":
@@ -19,7 +18,6 @@ sys.path.insert(0, os.path.abspath("src"))
 from agent_arena.api.app import create_app
 from agent_arena.api.deps import get_db_session
 from agent_arena.config import get_config
-from agent_arena.world.generator import generate_world
 from agent_arena.models import (
     Base,
     Task,
@@ -30,7 +28,7 @@ from agent_arena.models import (
 from agent_arena.services.auth_service import create_bearer_token, hash_token
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.tool_service import ToolService
-
+from agent_arena.world.generator import generate_world
 
 NUM_TEAMS = 50
 
@@ -94,12 +92,14 @@ async def run_team_workflow(
     tx = next(t for t in r4.json()["transactions"] if t["id"] == txn_id)
     assert tx["refunded_amount"] == refund_amt
 
-    results.append({
-        "team_idx": team_idx,
-        "team_id": team.team_id,
-        "latencies": team_latencies,
-        "refund_amt": refund_amt,
-    })
+    results.append(
+        {
+            "team_idx": team_idx,
+            "team_id": team.team_id,
+            "latencies": team_latencies,
+            "refund_amt": refund_amt,
+        }
+    )
 
 
 async def main():
@@ -146,28 +146,32 @@ async def main():
 
             world = generate_world(seed=1000 + i)
             cust_id = f"CUS-LOAD-{run_id}-{i:03d}"
-            world["customers"].append({
-                "id": cust_id,
-                "name": f"Customer {i}",
-                "tier": "pro",
-                "region": "NA",
-                "verification_status": "verified",
-                "account_status": "active",
-                "created_at": "2026-01-01T00:00:00Z",
-            })
+            world["customers"].append(
+                {
+                    "id": cust_id,
+                    "name": f"Customer {i}",
+                    "tier": "pro",
+                    "region": "NA",
+                    "verification_status": "verified",
+                    "account_status": "active",
+                    "created_at": "2026-01-01T00:00:00Z",
+                }
+            )
             txn_id = f"TXN-LOAD-{run_id}-{i:03d}"
-            world["transactions"].append({
-                "id": txn_id,
-                "customer_id": cust_id,
-                "amount": 200.0,
-                "currency": "USD",
-                "date": "2026-09-12T00:00:00Z",
-                "status": "completed",
-                "chargeback_status": "none",
-                "under_fraud_investigation": False,
-                "refund_status": "none",
-                "refunded_amount": 0.0,
-            })
+            world["transactions"].append(
+                {
+                    "id": txn_id,
+                    "customer_id": cust_id,
+                    "amount": 200.0,
+                    "currency": "USD",
+                    "date": "2026-09-12T00:00:00Z",
+                    "status": "completed",
+                    "chargeback_status": "none",
+                    "under_fraud_investigation": False,
+                    "refund_status": "none",
+                    "refunded_amount": 0.0,
+                }
+            )
 
             task_id = f"TASK-LOAD-{run_id}-{i:03d}"
             task = Task(
@@ -177,27 +181,34 @@ async def main():
                 variant="normal",
                 input_payload={"customer_id": cust_id, "customer_message": "Load test"},
                 world_state_seed=copy.deepcopy(world),
-                ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+                ground_truth={
+                    "expected_resolution": "refund",
+                    "must_escalate": False,
+                    "required_evidence": ["DOC-1001"],
+                },
             )
             session.add(task)
             await session.commit()
 
             assignment = await tool_service.assign_task(team_id, task_id)
-            teams_data.append({
-                "team_idx": i,
-                "team": team,
-                "token": token,
-                "task_id": task_id,
-                "assignment_id": assignment.id,
-                "cust_id": cust_id,
-                "txn_id": txn_id,
-                "seed": copy.deepcopy(task.world_state_seed),
-            })
+            teams_data.append(
+                {
+                    "team_idx": i,
+                    "team": team,
+                    "token": token,
+                    "task_id": task_id,
+                    "assignment_id": assignment.id,
+                    "cust_id": cust_id,
+                    "txn_id": txn_id,
+                    "seed": copy.deepcopy(task.world_state_seed),
+                }
+            )
 
         print(f"[PASS] Successfully provisioned {NUM_TEAMS} teams and assignments.")
 
     # 2. Setup FastAPI App & AsyncClient
     import agent_arena.db as db_mod
+
     db_mod._engine = engine
     db_mod._session_maker = session_factory
 
@@ -273,10 +284,10 @@ async def main():
 
             # Check tool call logs count & token scrubbing
             logs = (
-                await session.execute(
-                    sa.select(ToolCallLog).where(ToolCallLog.team_id == td["team"].team_id)
-                )
-            ).scalars().all()
+                (await session.execute(sa.select(ToolCallLog).where(ToolCallLog.team_id == td["team"].team_id)))
+                .scalars()
+                .all()
+            )
             assert len(logs) == 4, f"Team {i} logged {len(logs)} calls, expected 4"
             for log in logs:
                 req_str = str(log.request_payload)

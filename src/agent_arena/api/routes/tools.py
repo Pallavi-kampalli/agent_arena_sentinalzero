@@ -1,4 +1,5 @@
 from typing import Annotated, Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/tools", tags=["tools"])
 
 
 # --- Read Tools (6 endpoints) ---
+
 
 @router.post("/search_knowledge")
 async def search_knowledge(
@@ -98,6 +100,7 @@ async def get_previous_cases(
 
 # --- Action Tools (4 endpoints, server-side enforced) ---
 
+
 @router.post("/issue_refund")
 async def issue_refund(
     req: IssueRefundRequest,
@@ -106,7 +109,7 @@ async def issue_refund(
     settings_service: Annotated[SettingsService, Depends(get_settings_service)],
 ) -> dict[str, Any]:
     """Refunds a transaction with server-side eligibility enforcement.
-    
+
     Always returns HTTP 200 on valid requests; policy rejection returns { error: 'INELIGIBLE', ... }.
     """
     service = ToolService(session, settings_service)

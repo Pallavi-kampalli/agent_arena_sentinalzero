@@ -1,7 +1,7 @@
 import argparse
 import asyncio
 import json
-from typing import Optional
+
 import sqlalchemy as sa
 
 from agent_arena.db import get_session_maker
@@ -28,10 +28,11 @@ def format_matrix_ascii(matrix: dict[str, dict[str, int]], title: str) -> str:
     sep_parts.append("-" * tot_width + "+")
     sep = "+".join(sep_parts)
 
-    header_parts = [f"| {'Family \\ Variant':<{fam_width-2}} "]
+    header_label = "Family \\ Variant"
+    header_parts = [f"| {header_label:<{fam_width - 2}} "]
     for v in VARIANTS:
-        header_parts.append(f"{v:>{var_widths[v]-2}} ")
-    header_parts.append(f"{'TOTAL':>{tot_width-2}} |")
+        header_parts.append(f"{v:>{var_widths[v] - 2}} ")
+    header_parts.append(f"{'TOTAL':>{tot_width - 2}} |")
     header = " | ".join(header_parts)
 
     lines.append(sep)
@@ -47,23 +48,23 @@ def format_matrix_ascii(matrix: dict[str, dict[str, int]], title: str) -> str:
         for v in VARIANTS:
             col_totals[v] += matrix.get(fam, {}).get(v, 0)
         c = matrix.get(fam, {})
-        row_parts = [f"| {fam:<{fam_width-2}} "]
+        row_parts = [f"| {fam:<{fam_width - 2}} "]
         for v in VARIANTS:
-            row_parts.append(f"{c.get(v, 0):>{var_widths[v]-2}} ")
-        row_parts.append(f"{row_total:>{tot_width-2}} |")
+            row_parts.append(f"{c.get(v, 0):>{var_widths[v] - 2}} ")
+        row_parts.append(f"{row_total:>{tot_width - 2}} |")
         lines.append(" | ".join(row_parts))
 
     lines.append(sep)
-    tot_parts = [f"| {'TOTAL':<{fam_width-2}} "]
+    tot_parts = [f"| {'TOTAL':<{fam_width - 2}} "]
     for v in VARIANTS:
-        tot_parts.append(f"{col_totals[v]:>{var_widths[v]-2}} ")
-    tot_parts.append(f"{grand_total:>{tot_width-2}} |")
+        tot_parts.append(f"{col_totals[v]:>{var_widths[v] - 2}} ")
+    tot_parts.append(f"{grand_total:>{tot_width - 2}} |")
     lines.append(" | ".join(tot_parts))
     lines.append(sep)
     return "\n".join(lines)
 
 
-async def cmd_load_dataset(dataset_type: str, count: Optional[int], seed: Optional[int], replace: bool):
+async def cmd_load_dataset(dataset_type: str, count: int | None, seed: int | None, replace: bool):
     session_maker = get_session_maker()
     async with session_maker() as session:
         service = DatasetService(session)
@@ -169,4 +170,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

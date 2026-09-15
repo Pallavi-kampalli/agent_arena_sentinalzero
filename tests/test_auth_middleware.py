@@ -1,15 +1,16 @@
 import uuid
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent_arena.models.team import Team
 from agent_arena.services.auth_service import (
     create_bearer_token,
     hash_token,
-    register_team,
     regenerate_team_token,
+    register_team,
 )
-from agent_arena.models.team import Team
 
 
 @pytest.mark.asyncio

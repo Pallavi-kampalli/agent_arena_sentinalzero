@@ -1,15 +1,16 @@
 import asyncio
 import copy
 from unittest.mock import patch
+
 import pytest
-from httpx import AsyncClient
 import sqlalchemy as sa
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.models.task import Task
 from agent_arena.models.task_assignment import TaskAssignment
-from agent_arena.models.tool_call_log import ToolCallLog
 from agent_arena.models.team import Team
+from agent_arena.models.tool_call_log import ToolCallLog
 from agent_arena.services.auth_service import register_team
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.tool_service import ToolService
@@ -27,51 +28,59 @@ async def setup_adversarial_env(db_session: AsyncSession):
     team, token = await register_team(db_session, "AdversarialTeam")
 
     world = generate_world(seed=101)
-    world["customers"].append({
-        "id": "CUS-ADV-01",
-        "name": "Target Customer",
-        "tier": "pro",
-        "region": "NA",
-        "verification_status": "verified",
-        "account_status": "active",
-        "created_at": "2026-01-01T00:00:00Z",
-    })
-    world["transactions"].append({
-        "id": "TXN-ADV-01",
-        "customer_id": "CUS-ADV-01",
-        "amount": 100.0,
-        "currency": "USD",
-        "date": "2026-09-12T00:00:00Z",
-        "status": "completed",
-        "chargeback_status": "none",
-        "under_fraud_investigation": False,
-        "refund_status": "none",
-        "refunded_amount": 0.0,
-    })
-    world["transactions"].append({
-        "id": "TXN-ADV-HOLD",
-        "customer_id": "CUS-ADV-01",
-        "amount": 200.0,
-        "currency": "USD",
-        "date": "2026-09-12T00:00:00Z",
-        "status": "completed",
-        "chargeback_status": "investigation_active",
-        "under_fraud_investigation": True,
-        "refund_status": "none",
-        "refunded_amount": 0.0,
-    })
-    world["subscriptions"].append({
-        "id": "SUB-ADV-LOCKIN",
-        "customer_id": "CUS-ADV-01",
-        "plan": "pro_annual",
-        "billing_cycle": "annual",
-        "amount": 1200.0,
-        "status": "active",
-        "start_date": "2026-01-01T00:00:00Z",
-        "lock_in_until": "2026-12-31T23:59:59Z",
-        "has_approved_exception": False,
-        "has_unresolved_dispute": False,
-    })
+    world["customers"].append(
+        {
+            "id": "CUS-ADV-01",
+            "name": "Target Customer",
+            "tier": "pro",
+            "region": "NA",
+            "verification_status": "verified",
+            "account_status": "active",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    world["transactions"].append(
+        {
+            "id": "TXN-ADV-01",
+            "customer_id": "CUS-ADV-01",
+            "amount": 100.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
+    world["transactions"].append(
+        {
+            "id": "TXN-ADV-HOLD",
+            "customer_id": "CUS-ADV-01",
+            "amount": 200.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "investigation_active",
+            "under_fraud_investigation": True,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
+    world["subscriptions"].append(
+        {
+            "id": "SUB-ADV-LOCKIN",
+            "customer_id": "CUS-ADV-01",
+            "plan": "pro_annual",
+            "billing_cycle": "annual",
+            "amount": 1200.0,
+            "status": "active",
+            "start_date": "2026-01-01T00:00:00Z",
+            "lock_in_until": "2026-12-31T23:59:59Z",
+            "has_approved_exception": False,
+            "has_unresolved_dispute": False,
+        }
+    )
 
     task = Task(
         task_id="TASK-ADV-01",
@@ -145,15 +154,77 @@ async def test_cross_task_identical_entities_full_isolation(client: AsyncClient,
     team2, token2 = await register_team(db_session, "IsoTeam2")
 
     world1 = generate_world(seed=201)
-    world1["customers"].append({"id": "CUS-SHARED", "name": "Team 1 Customer", "tier": "pro", "region": "NA", "verification_status": "verified", "account_status": "active", "created_at": "2026-01-01T00:00:00Z"})
-    world1["transactions"].append({"id": "TXN-SHARED", "customer_id": "CUS-SHARED", "amount": 200.0, "currency": "USD", "date": "2026-09-12T00:00:00Z", "status": "completed", "chargeback_status": "none", "under_fraud_investigation": False, "refund_status": "none", "refunded_amount": 0.0})
+    world1["customers"].append(
+        {
+            "id": "CUS-SHARED",
+            "name": "Team 1 Customer",
+            "tier": "pro",
+            "region": "NA",
+            "verification_status": "verified",
+            "account_status": "active",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    world1["transactions"].append(
+        {
+            "id": "TXN-SHARED",
+            "customer_id": "CUS-SHARED",
+            "amount": 200.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
 
     world2 = generate_world(seed=202)
-    world2["customers"].append({"id": "CUS-SHARED", "name": "Team 2 Customer", "tier": "free", "region": "EU", "verification_status": "verified", "account_status": "active", "created_at": "2026-01-01T00:00:00Z"})
-    world2["transactions"].append({"id": "TXN-SHARED", "customer_id": "CUS-SHARED", "amount": 200.0, "currency": "USD", "date": "2026-09-12T00:00:00Z", "status": "completed", "chargeback_status": "none", "under_fraud_investigation": False, "refund_status": "none", "refunded_amount": 0.0})
+    world2["customers"].append(
+        {
+            "id": "CUS-SHARED",
+            "name": "Team 2 Customer",
+            "tier": "free",
+            "region": "EU",
+            "verification_status": "verified",
+            "account_status": "active",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    world2["transactions"].append(
+        {
+            "id": "TXN-SHARED",
+            "customer_id": "CUS-SHARED",
+            "amount": 200.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
 
-    task1 = Task(task_id="TASK-SHARED-1", dataset="dev", family="refund_request", variant="normal", input_payload={"customer_id": "CUS-SHARED", "customer_message": "T1"}, world_state_seed=world1, ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]})
-    task2 = Task(task_id="TASK-SHARED-2", dataset="dev", family="refund_request", variant="normal", input_payload={"customer_id": "CUS-SHARED", "customer_message": "T2"}, world_state_seed=world2, ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]})
+    task1 = Task(
+        task_id="TASK-SHARED-1",
+        dataset="dev",
+        family="refund_request",
+        variant="normal",
+        input_payload={"customer_id": "CUS-SHARED", "customer_message": "T1"},
+        world_state_seed=world1,
+        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+    )
+    task2 = Task(
+        task_id="TASK-SHARED-2",
+        dataset="dev",
+        family="refund_request",
+        variant="normal",
+        input_payload={"customer_id": "CUS-SHARED", "customer_message": "T2"},
+        world_state_seed=world2,
+        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+    )
     db_session.add_all([task1, task2])
     await db_session.commit()
 
@@ -165,7 +236,11 @@ async def test_cross_task_identical_entities_full_isolation(client: AsyncClient,
     headers2 = {"Authorization": f"Bearer {token2}"}
 
     # Team 1 refunds $80
-    r1 = await client.post("/tools/issue_refund", json={"transaction_id": "TXN-SHARED", "amount": 80.0, "reason": "T1 partial"}, headers=headers1)
+    r1 = await client.post(
+        "/tools/issue_refund",
+        json={"transaction_id": "TXN-SHARED", "amount": 80.0, "reason": "T1 partial"},
+        headers=headers1,
+    )
     assert r1.status_code == 200
     assert r1.json()["status"] == "partially_refunded"
     assert r1.json()["transaction"]["refunded_amount"] == 80.0
@@ -178,7 +253,11 @@ async def test_cross_task_identical_entities_full_isolation(client: AsyncClient,
     assert tx2["refunded_amount"] == 0.0
 
     # Team 2 refunds entire $200
-    r3 = await client.post("/tools/issue_refund", json={"transaction_id": "TXN-SHARED", "amount": 200.0, "reason": "T2 full"}, headers=headers2)
+    r3 = await client.post(
+        "/tools/issue_refund",
+        json={"transaction_id": "TXN-SHARED", "amount": 200.0, "reason": "T2 full"},
+        headers=headers2,
+    )
     assert r3.status_code == 200
     assert r3.json()["status"] == "refunded"
     assert r3.json()["transaction"]["refunded_amount"] == 200.0
@@ -211,10 +290,26 @@ async def test_seed_immutability_across_actions(client: AsyncClient, db_session:
     await client.post("/tools/get_previous_cases", json={"customer_id": "CUS-ADV-01"}, headers=headers)
 
     # Perform Action tools
-    await client.post("/tools/issue_refund", json={"transaction_id": "TXN-ADV-01", "amount": 20.0, "reason": "action"}, headers=headers)
-    await client.post("/tools/cancel_subscription", json={"customer_id": "CUS-ADV-01", "subscription_id": "SUB-ADV-LOCKIN"}, headers=headers)
-    await client.post("/tools/escalate_case", json={"case_id": "TXN-ADV-01", "team": "billing_specialists", "reason": "Escalating per DOC-1001"}, headers=headers)
-    await client.post("/tools/request_verification", json={"customer_id": "CUS-ADV-01", "verification_type": "identity"}, headers=headers)
+    await client.post(
+        "/tools/issue_refund",
+        json={"transaction_id": "TXN-ADV-01", "amount": 20.0, "reason": "action"},
+        headers=headers,
+    )
+    await client.post(
+        "/tools/cancel_subscription",
+        json={"customer_id": "CUS-ADV-01", "subscription_id": "SUB-ADV-LOCKIN"},
+        headers=headers,
+    )
+    await client.post(
+        "/tools/escalate_case",
+        json={"case_id": "TXN-ADV-01", "team": "billing_specialists", "reason": "Escalating per DOC-1001"},
+        headers=headers,
+    )
+    await client.post(
+        "/tools/request_verification",
+        json={"customer_id": "CUS-ADV-01", "verification_type": "identity"},
+        headers=headers,
+    )
 
     # Re-fetch task and verify world_state_seed is 100% byte-for-byte identical
     db_session.expire_all()
@@ -266,7 +361,9 @@ async def test_zero_mutation_on_rejected_actions(client: AsyncClient, db_session
 
 # 5. Partial Refund Accumulation and Boundary Limits
 @pytest.mark.asyncio
-async def test_partial_refund_accumulation_and_limits(client: AsyncClient, db_session: AsyncSession, setup_adversarial_env):
+async def test_partial_refund_accumulation_and_limits(
+    client: AsyncClient, db_session: AsyncSession, setup_adversarial_env
+):
     env = setup_adversarial_env
     headers = {"Authorization": f"Bearer {env['token']}"}
     assign_id = env["assignment_id"]
@@ -338,10 +435,7 @@ async def test_concurrency_race_5_requests(client: AsyncClient, db_session: Asyn
 
     # Launch 5 concurrent full-refund attempts
     req = {"transaction_id": "TXN-ADV-01", "amount": 100.0, "reason": "Concurrent race 5"}
-    resps5 = await asyncio.gather(*[
-        client.post("/tools/issue_refund", json=req, headers=headers)
-        for _ in range(5)
-    ])
+    resps5 = await asyncio.gather(*[client.post("/tools/issue_refund", json=req, headers=headers) for _ in range(5)])
 
     results5 = [r.json() for r in resps5]
     successes5 = [r for r in results5 if r.get("status") == "refunded"]
@@ -370,10 +464,7 @@ async def test_concurrency_budget_race(client: AsyncClient, db_session: AsyncSes
     headers = {"Authorization": f"Bearer {env['token']}"}
 
     # Fire 10 concurrent requests at the exact same millisecond
-    tasks = [
-        client.post("/tools/get_customer", json={"customer_id": "CUS-ADV-01"}, headers=headers)
-        for _ in range(10)
-    ]
+    tasks = [client.post("/tools/get_customer", json={"customer_id": "CUS-ADV-01"}, headers=headers) for _ in range(10)]
     resps = await asyncio.gather(*tasks)
 
     status_codes = [r.status_code for r in resps]
@@ -418,8 +509,7 @@ async def test_concurrency_rate_limit_race(client: AsyncClient, db_session: Asyn
 
     # Fire 10 concurrent requests at the same millisecond
     tasks = [
-        client.post("/tools/get_customer", json={"customer_id": first_cust_id}, headers=headers)
-        for _ in range(10)
+        client.post("/tools/get_customer", json={"customer_id": first_cust_id}, headers=headers) for _ in range(10)
     ]
     resps = await asyncio.gather(*tasks)
 
@@ -460,7 +550,9 @@ async def test_budget_and_rate_limit_interaction(client: AsyncClient, db_session
 
 # 10. Escalation Evidence Grounding Attacks
 @pytest.mark.asyncio
-async def test_escalation_evidence_grounding_adversarial(client: AsyncClient, db_session: AsyncSession, setup_adversarial_env):
+async def test_escalation_evidence_grounding_adversarial(
+    client: AsyncClient, db_session: AsyncSession, setup_adversarial_env
+):
     env = setup_adversarial_env
     headers = {"Authorization": f"Bearer {env['token']}"}
 
@@ -477,7 +569,11 @@ async def test_escalation_evidence_grounding_adversarial(client: AsyncClient, db
     # Attack B: Keyword-only reason without any evidence ID cited
     r_kw = await client.post(
         "/tools/escalate_case",
-        json={"case_id": "TXN-ADV-01", "team": "billing_specialists", "reason": "Suspicious fraudulent activity and chargeback investigation required"},
+        json={
+            "case_id": "TXN-ADV-01",
+            "team": "billing_specialists",
+            "reason": "Suspicious fraudulent activity and chargeback investigation required",
+        },
         headers=headers,
     )
     assert r_kw.status_code == 200
@@ -515,15 +611,25 @@ async def test_input_validation_attacks(client: AsyncClient, setup_adversarial_e
     headers = {"Authorization": f"Bearer {env['token']}"}
 
     # Attack A: Negative refund amount
-    r_neg = await client.post("/tools/issue_refund", json={"transaction_id": "TXN-ADV-01", "amount": -10.0, "reason": "Negative"}, headers=headers)
+    r_neg = await client.post(
+        "/tools/issue_refund",
+        json={"transaction_id": "TXN-ADV-01", "amount": -10.0, "reason": "Negative"},
+        headers=headers,
+    )
     assert r_neg.status_code == 422
 
     # Attack B: Zero refund amount
-    r_zero = await client.post("/tools/issue_refund", json={"transaction_id": "TXN-ADV-01", "amount": 0.0, "reason": "Zero"}, headers=headers)
+    r_zero = await client.post(
+        "/tools/issue_refund", json={"transaction_id": "TXN-ADV-01", "amount": 0.0, "reason": "Zero"}, headers=headers
+    )
     assert r_zero.status_code == 422
 
     # Attack C: Giant refund amount exceeding schema cap (> 1,000,000)
-    r_giant = await client.post("/tools/issue_refund", json={"transaction_id": "TXN-ADV-01", "amount": 1_000_001.0, "reason": "Giant"}, headers=headers)
+    r_giant = await client.post(
+        "/tools/issue_refund",
+        json={"transaction_id": "TXN-ADV-01", "amount": 1_000_001.0, "reason": "Giant"},
+        headers=headers,
+    )
     assert r_giant.status_code == 422
 
     # Attack D: Reversed date range (start_date > end_date)
@@ -562,15 +668,17 @@ async def test_subscription_contract_distinction(client: AsyncClient, db_session
     # Inject a customer who genuinely has NO subscription
     assign = await db_session.get(TaskAssignment, assign_id)
     runtime = copy.deepcopy(assign.world_runtime_state)
-    runtime["customers"].append({
-        "id": "CUS-NO-SUB",
-        "name": "No Sub Customer",
-        "tier": "free",
-        "region": "NA",
-        "verification_status": "verified",
-        "account_status": "active",
-        "created_at": "2026-01-01T00:00:00Z",
-    })
+    runtime["customers"].append(
+        {
+            "id": "CUS-NO-SUB",
+            "name": "No Sub Customer",
+            "tier": "free",
+            "region": "NA",
+            "verification_status": "verified",
+            "account_status": "active",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    )
     assign.world_runtime_state = runtime
     await db_session.commit()
 
@@ -611,7 +719,9 @@ async def test_subscription_contract_distinction(client: AsyncClient, db_session
 
 # 12b. Immediate Multi-Worker Token Revocation (Zero Positive Auth Cache Delay)
 @pytest.mark.asyncio
-async def test_immediate_token_revocation_no_cache(client: AsyncClient, db_session: AsyncSession, setup_adversarial_env):
+async def test_immediate_token_revocation_no_cache(
+    client: AsyncClient, db_session: AsyncSession, setup_adversarial_env
+):
     """Proves token regeneration revokes the old token IMMEDIATELY on the very next request
     with zero cache latency across all workers/processes.
     """
@@ -680,18 +790,20 @@ async def test_exact_decimal_arithmetic_precision(client: AsyncClient, db_sessio
     # Inject transaction with tricky fractional amounts ($100.00 total)
     assign = await db_session.get(TaskAssignment, assign_id)
     runtime = copy.deepcopy(assign.world_runtime_state)
-    runtime["transactions"].append({
-        "id": "TXN-DECIMAL-EXACT",
-        "customer_id": "CUS-ADV-01",
-        "amount": 100.0,
-        "currency": "USD",
-        "date": "2026-09-12T00:00:00Z",
-        "status": "completed",
-        "chargeback_status": "none",
-        "under_fraud_investigation": False,
-        "refund_status": "none",
-        "refunded_amount": 0.0,
-    })
+    runtime["transactions"].append(
+        {
+            "id": "TXN-DECIMAL-EXACT",
+            "customer_id": "CUS-ADV-01",
+            "amount": 100.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
     assign.world_runtime_state = runtime
     await db_session.commit()
 
@@ -727,7 +839,9 @@ async def test_exact_decimal_arithmetic_precision(client: AsyncClient, db_sessio
 
 # 13. Failure Injection & Database Rollback
 @pytest.mark.asyncio
-async def test_database_failure_injection_rollback(client: AsyncClient, db_session: AsyncSession, setup_adversarial_env):
+async def test_database_failure_injection_rollback(
+    client: AsyncClient, db_session: AsyncSession, setup_adversarial_env
+):
     env = setup_adversarial_env
     headers = {"Authorization": f"Bearer {env['token']}"}
     assign_id = env["assignment_id"]
@@ -812,27 +926,31 @@ async def test_multi_session_row_locking_serialization(test_engine, db_session: 
 
     team, token = await register_team(db_session, "MultiWorkerTeam")
     world = generate_world(seed=501)
-    world["customers"].append({
-        "id": "CUS-MW-01",
-        "name": "Worker User",
-        "tier": "pro",
-        "region": "NA",
-        "verification_status": "verified",
-        "account_status": "active",
-        "created_at": "2026-01-01T00:00:00Z",
-    })
-    world["transactions"].append({
-        "id": "TXN-MW-01",
-        "customer_id": "CUS-MW-01",
-        "amount": 100.0,
-        "currency": "USD",
-        "date": "2026-09-12T00:00:00Z",
-        "status": "completed",
-        "chargeback_status": "none",
-        "under_fraud_investigation": False,
-        "refund_status": "none",
-        "refunded_amount": 0.0,
-    })
+    world["customers"].append(
+        {
+            "id": "CUS-MW-01",
+            "name": "Worker User",
+            "tier": "pro",
+            "region": "NA",
+            "verification_status": "verified",
+            "account_status": "active",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    world["transactions"].append(
+        {
+            "id": "TXN-MW-01",
+            "customer_id": "CUS-MW-01",
+            "amount": 100.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
 
     task = Task(
         task_id="TASK-MW-01",
@@ -882,4 +1000,3 @@ async def test_multi_session_row_locking_serialization(test_engine, db_session: 
     tx = next(t for t in assign_final.world_runtime_state["transactions"] if t["id"] == "TXN-MW-01")
     assert tx["refund_status"] == "refunded"
     assert tx["refunded_amount"] == 100.0
-

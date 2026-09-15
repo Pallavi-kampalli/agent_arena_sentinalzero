@@ -6,7 +6,7 @@ from agent_arena.tasks.solver import ReferenceSolver
 
 def validate_task(task: dict[str, Any]) -> tuple[bool, str | None]:
     """Validates a generated task per PRD §8 and SupportOps_PS_v2.md.
-    
+
     Rejects tasks that are:
     - Structurally incomplete or malformed
     - Lacking customer or entity grounding in world_state_seed
@@ -15,7 +15,7 @@ def validate_task(task: dict[str, Any]) -> tuple[bool, str | None]:
     - Ambiguous (e.g. conflicting policies with identical timestamps)
     - Unsolvable (e.g. missing target action transaction/subscription or invalid amounts)
     - Internally inconsistent (e.g. orphan transactions/subscriptions not referencing valid customers)
-    
+
     Returns (is_valid, error_reason).
     """
     # 1. Structural checks
@@ -58,7 +58,10 @@ def validate_task(task: dict[str, Any]) -> tuple[bool, str | None]:
     for tx in world.get("transactions", []):
         tx_cust = tx.get("customer_id")
         if tx_cust not in customers:
-            return False, f"Internally inconsistent world state: Transaction '{tx.get('id')}' references non-existent customer '{tx_cust}'"
+            return (
+                False,
+                f"Internally inconsistent world state: Transaction '{tx.get('id')}' references non-existent customer '{tx_cust}'",
+            )
         amt = tx.get("amount")
         if amt is None or amt <= 0:
             return False, f"Unsolvable task: Transaction '{tx.get('id')}' has invalid non-positive amount: {amt}"
@@ -67,7 +70,10 @@ def validate_task(task: dict[str, Any]) -> tuple[bool, str | None]:
     for sub in world.get("subscriptions", []):
         sub_cust = sub.get("customer_id")
         if sub_cust not in customers:
-            return False, f"Internally inconsistent world state: Subscription '{sub.get('id')}' references non-existent customer '{sub_cust}'"
+            return (
+                False,
+                f"Internally inconsistent world state: Subscription '{sub.get('id')}' references non-existent customer '{sub_cust}'",
+            )
 
     # 4. Ambiguity check: no conflicting policies in the same category sharing the exact same updated_at
     policies_by_cat: dict[str, list[dict]] = {}
@@ -80,7 +86,10 @@ def validate_task(task: dict[str, Any]) -> tuple[bool, str | None]:
             timestamps = [p.get("updated_at") for p in pol_list]
             if len(timestamps) != len(set(timestamps)):
                 # Two policies in same category have identical updated_at
-                return False, f"Ambiguous task: category '{cat}' contains conflicting policies with identical updated_at timestamp"
+                return (
+                    False,
+                    f"Ambiguous task: category '{cat}' contains conflicting policies with identical updated_at timestamp",
+                )
 
     # 5. Ground truth structure checks
     gt = task["ground_truth"]
@@ -115,11 +124,17 @@ def validate_task(task: dict[str, Any]) -> tuple[bool, str | None]:
     if action_tool == "issue_refund":
         target_tx = action.get("params", {}).get("transaction_id")
         if not target_tx or target_tx not in all_tx_ids:
-            return False, f"Unsolvable task: expected action 'issue_refund' targets non-existent transaction '{target_tx}'"
+            return (
+                False,
+                f"Unsolvable task: expected action 'issue_refund' targets non-existent transaction '{target_tx}'",
+            )
     elif action_tool == "cancel_subscription":
         target_sub = action.get("params", {}).get("subscription_id")
         if not target_sub or target_sub not in all_sub_ids:
-            return False, f"Unsolvable task: expected action 'cancel_subscription' targets non-existent subscription '{target_sub}'"
+            return (
+                False,
+                f"Unsolvable task: expected action 'cancel_subscription' targets non-existent subscription '{target_sub}'",
+            )
 
     # 7. Evidence grounding check: all cited evidence IDs must exist in world state
     all_world_ids = set(customers.keys())

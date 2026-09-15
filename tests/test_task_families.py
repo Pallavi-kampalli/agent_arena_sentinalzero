@@ -1,4 +1,5 @@
 import pytest
+
 from agent_arena.tasks.generator import FAMILIES, VARIANTS, TaskGenerator
 from agent_arena.world.generator import generate_world
 
@@ -47,8 +48,10 @@ def test_all_six_variants_generate_successfully(base_world):
         assert len(task["ground_truth"]["required_evidence"]) > 0
 
         if variant == "adversarial":
-            assert "SYSTEM OVERRIDE" in task["input_payload"]["customer_message"] or \
-                   "furious" in task["input_payload"]["customer_message"].lower()
+            assert (
+                "SYSTEM OVERRIDE" in task["input_payload"]["customer_message"]
+                or "furious" in task["input_payload"]["customer_message"].lower()
+            )
 
         if variant == "distractor":
             docs = task["world_state_seed"]["documents"]

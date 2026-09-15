@@ -1,14 +1,12 @@
 import asyncio
-import copy
-from datetime import datetime, timezone
 import os
 import sys
 import time
 import uuid
 
 import httpx
-from httpx import ASGITransport
 import sqlalchemy as sa
+from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Ensure agent_arena is importable
@@ -17,12 +15,8 @@ sys.path.insert(0, os.path.abspath("src"))
 from agent_arena.api.app import create_app
 from agent_arena.api.deps import get_db_session
 from agent_arena.config import get_config
-from agent_arena.world.generator import generate_world
 from agent_arena.models import (
     Base,
-    Setting,
-    SettingsAuditLog,
-    Submission,
     Task,
     TaskAssignment,
     Team,
@@ -31,6 +25,7 @@ from agent_arena.models import (
 from agent_arena.services.auth_service import create_bearer_token, hash_token
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.tool_service import ToolService
+from agent_arena.world.generator import generate_world
 
 
 async def main():
@@ -71,40 +66,46 @@ async def main():
         # Generate world state with target customer and transaction
         world = generate_world(seed=12345)
         cust_id = "CUS-VERIFY-001"
-        world["customers"].append({
-            "id": cust_id,
-            "name": "Live Verify Customer",
-            "tier": "pro",
-            "region": "NA",
-            "verification_status": "verified",
-            "account_status": "active",
-            "created_at": "2026-01-01T00:00:00Z",
-        })
+        world["customers"].append(
+            {
+                "id": cust_id,
+                "name": "Live Verify Customer",
+                "tier": "pro",
+                "region": "NA",
+                "verification_status": "verified",
+                "account_status": "active",
+                "created_at": "2026-01-01T00:00:00Z",
+            }
+        )
         txn_id = "TXN-VERIFY-001"
-        world["transactions"].append({
-            "id": txn_id,
-            "customer_id": cust_id,
-            "amount": 75.0,
-            "currency": "USD",
-            "date": "2026-09-12T00:00:00Z",
-            "status": "completed",
-            "chargeback_status": "none",
-            "under_fraud_investigation": False,
-            "refund_status": "none",
-            "refunded_amount": 0.0,
-        })
+        world["transactions"].append(
+            {
+                "id": txn_id,
+                "customer_id": cust_id,
+                "amount": 75.0,
+                "currency": "USD",
+                "date": "2026-09-12T00:00:00Z",
+                "status": "completed",
+                "chargeback_status": "none",
+                "under_fraud_investigation": False,
+                "refund_status": "none",
+                "refunded_amount": 0.0,
+            }
+        )
         sub_id = "SUB-VERIFY-001"
-        world["subscriptions"].append({
-            "id": sub_id,
-            "customer_id": cust_id,
-            "plan_type": "pro",
-            "start_date": "2026-01-01T00:00:00Z",
-            "renewal_date": "2026-10-01T00:00:00Z",
-            "status": "active",
-            "cancellation_effective_date": None,
-            "billing_cycle": "monthly",
-            "auto_renew": True,
-        })
+        world["subscriptions"].append(
+            {
+                "id": sub_id,
+                "customer_id": cust_id,
+                "plan_type": "pro",
+                "start_date": "2026-01-01T00:00:00Z",
+                "renewal_date": "2026-10-01T00:00:00Z",
+                "status": "active",
+                "cancellation_effective_date": None,
+                "billing_cycle": "monthly",
+                "auto_renew": True,
+            }
+        )
 
         task_id = f"TASK-PG-{uuid.uuid4().hex[:6]}"
         task = Task(
@@ -127,6 +128,7 @@ async def main():
 
     # 3. Create FastAPI app & AsyncClient pointing to real PostgreSQL
     import agent_arena.db as db_mod
+
     db_mod._engine = engine
     db_mod._session_maker = session_factory
 
@@ -182,7 +184,7 @@ async def main():
         r6 = await client.post("/tools/get_previous_cases", json={"customer_id": cust_id, "limit": 3}, headers=headers)
         assert r6.status_code == 200
         assert "cases" in r6.json()
-        print(f"[PASS] POST /tools/get_previous_cases -> 200 OK")
+        print("[PASS] POST /tools/get_previous_cases -> 200 OK")
 
         # Action Tool 1: issue_refund (Eligible -> Success)
         r_ref = await client.post(
@@ -193,7 +195,7 @@ async def main():
         assert r_ref.status_code == 200
         assert r_ref.json()["status"] == "refunded"
         assert r_ref.json()["transaction"]["refund_status"] == "refunded"
-        print(f"[PASS] POST /tools/issue_refund (1st attempt) -> 200 OK (status: refunded)")
+        print("[PASS] POST /tools/issue_refund (1st attempt) -> 200 OK (status: refunded)")
 
         # Action Tool 1b: issue_refund (Ineligible -> Rejection)
         r_ref_dupe = await client.post(
@@ -204,7 +206,7 @@ async def main():
         assert r_ref_dupe.status_code == 200
         assert r_ref_dupe.json()["error"] == "INELIGIBLE"
         assert r_ref_dupe.json()["reason"] == "already_refunded"
-        print(f"[PASS] POST /tools/issue_refund (duplicate) -> 200 OK (error: INELIGIBLE, reason: already_refunded)")
+        print("[PASS] POST /tools/issue_refund (duplicate) -> 200 OK (error: INELIGIBLE, reason: already_refunded)")
 
         # Action Tool 2: cancel_subscription
         r_cancel = await client.post(
@@ -213,7 +215,9 @@ async def main():
             headers=headers,
         )
         assert r_cancel.status_code == 200
-        print(f"[PASS] POST /tools/cancel_subscription -> 200 OK (result: {r_cancel.json().get('status') or r_cancel.json().get('error')})")
+        print(
+            f"[PASS] POST /tools/cancel_subscription -> 200 OK (result: {r_cancel.json().get('status') or r_cancel.json().get('error')})"
+        )
 
         # Action Tool 3: escalate_case (Grounded: DOC-1001 retrieved in tool call 2)
         r_esc_good = await client.post(
@@ -223,7 +227,7 @@ async def main():
         )
         assert r_esc_good.status_code == 200
         assert r_esc_good.json()["status"] == "escalated"
-        print(f"[PASS] POST /tools/escalate_case (grounded with DOC-1001) -> 200 OK (status: escalated)")
+        print("[PASS] POST /tools/escalate_case (grounded with DOC-1001) -> 200 OK (status: escalated)")
 
         # Action Tool 3b: escalate_case (Ungrounded phantom)
         r_esc_bad = await client.post(
@@ -234,7 +238,7 @@ async def main():
         assert r_esc_bad.status_code == 200
         assert r_esc_bad.json()["error"] == "INVALID_ESCALATION"
         assert r_esc_bad.json()["reason"] == "reason_not_grounded"
-        print(f"[PASS] POST /tools/escalate_case (ungrounded) -> 200 OK (error: INVALID_ESCALATION)")
+        print("[PASS] POST /tools/escalate_case (ungrounded) -> 200 OK (error: INVALID_ESCALATION)")
 
         # Action Tool 4: request_verification
         r_ver = await client.post(
@@ -244,7 +248,7 @@ async def main():
         )
         assert r_ver.status_code == 200
         assert r_ver.json()["status"] == "verification_requested"
-        print(f"[PASS] POST /tools/request_verification -> 200 OK (status: verification_requested)")
+        print("[PASS] POST /tools/request_verification -> 200 OK (status: verification_requested)")
 
         # 4. Latency Benchmark: 50 requests across read and action tools
         print("\n--- Running Latency Benchmark (50 requests against PostgreSQL) ---")
@@ -256,7 +260,9 @@ async def main():
         latencies = []
         for i in range(50):
             t_start = time.perf_counter()
-            resp = await client.post("/tools/search_knowledge", json={"query": f"refund test {i}", "top_k": 3}, headers=headers)
+            resp = await client.post(
+                "/tools/search_knowledge", json={"query": f"refund test {i}", "top_k": 3}, headers=headers
+            )
             assert resp.status_code == 200, f"Call {i} failed with {resp.status_code}: {resp.text}"
             elapsed_ms = (time.perf_counter() - t_start) * 1000
             latencies.append(elapsed_ms)
@@ -287,9 +293,7 @@ async def main():
 
         # Inspect tool_call_logs
         logs_res = await session.execute(
-            sa.select(ToolCallLog)
-            .where(ToolCallLog.team_id == team_id)
-            .order_by(ToolCallLog.created_at.asc())
+            sa.select(ToolCallLog).where(ToolCallLog.team_id == team_id).order_by(ToolCallLog.created_at.asc())
         )
         logs = list(logs_res.scalars().all())
         print(f"Direct DB Check: Found {len(logs)} tool_call_logs recorded for team.")
@@ -305,15 +309,24 @@ async def main():
             assert token not in req_str
 
         # Confirm was_enforcement_rejection flags
-        refund_dupe_log = next(l for l in logs if l.tool_name == "issue_refund" and l.response_payload.get("error") == "INELIGIBLE")
+        refund_dupe_log = next(
+            log_entry
+            for log_entry in logs
+            if log_entry.tool_name == "issue_refund" and log_entry.response_payload.get("error") == "INELIGIBLE"
+        )
         assert refund_dupe_log.was_enforcement_rejection is True
         print("[PASS] Enforcement rejection logged with was_enforcement_rejection=True.")
 
-        escalate_ungrounded_log = next(l for l in logs if l.tool_name == "escalate_case" and l.response_payload.get("error") == "INVALID_ESCALATION")
+        escalate_ungrounded_log = next(
+            log_entry
+            for log_entry in logs
+            if log_entry.tool_name == "escalate_case"
+            and log_entry.response_payload.get("error") == "INVALID_ESCALATION"
+        )
         assert escalate_ungrounded_log.was_enforcement_rejection is True
         print("[PASS] Invalid escalation logged with was_enforcement_rejection=True.")
 
-        search_log = next(l for l in logs if l.tool_name == "search_knowledge")
+        search_log = next(log_entry for log_entry in logs if log_entry.tool_name == "search_knowledge")
         assert search_log.was_enforcement_rejection is False
         print("[PASS] Eligible read tool logged with was_enforcement_rejection=False.")
 

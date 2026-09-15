@@ -1,10 +1,9 @@
 import uuid
+
 import pytest
 from httpx import AsyncClient
-import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_arena.models.submission import Submission
 from agent_arena.models.task import Task
 from agent_arena.models.team import Team
 from agent_arena.services.auth_service import create_bearer_token, hash_token
@@ -55,7 +54,9 @@ async def registered_team(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_submission_start_success_and_monotonic_attempt(client: AsyncClient, db_session: AsyncSession, registered_team):
+async def test_submission_start_success_and_monotonic_attempt(
+    client: AsyncClient, db_session: AsyncSession, registered_team
+):
     team, token = registered_team
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -103,7 +104,9 @@ async def test_submission_start_success_and_monotonic_attempt(client: AsyncClien
 
 
 @pytest.mark.asyncio
-async def test_submission_finalize_idempotent_and_closed_state(client: AsyncClient, db_session: AsyncSession, registered_team):
+async def test_submission_finalize_idempotent_and_closed_state(
+    client: AsyncClient, db_session: AsyncSession, registered_team
+):
     team, token = registered_team
     headers = {"Authorization": f"Bearer {token}"}
 

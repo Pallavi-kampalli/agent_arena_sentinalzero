@@ -1,18 +1,17 @@
 import uuid
-from datetime import datetime, timezone
+
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.models import (
-    Base,
-    Team,
-    Task,
-    Submission,
-    TaskAssignment,
-    ToolCallLog,
     Setting,
     SettingsAuditLog,
+    Submission,
+    Task,
+    TaskAssignment,
+    Team,
+    ToolCallLog,
 )
 
 
@@ -20,9 +19,7 @@ from agent_arena.models import (
 async def test_tables_created(test_engine):
     """Verify all 7 tables exist in the database schema."""
     async with test_engine.connect() as conn:
-        tables = await conn.run_sync(
-            lambda sync_conn: sa.inspect(sync_conn).get_table_names()
-        )
+        tables = await conn.run_sync(lambda sync_conn: sa.inspect(sync_conn).get_table_names())
     expected_tables = {
         "teams",
         "tasks",

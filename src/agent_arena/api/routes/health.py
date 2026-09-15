@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+
 from agent_arena.api.deps import get_settings_service
 from agent_arena.config import get_config
 from agent_arena.services.settings_service import SettingsService

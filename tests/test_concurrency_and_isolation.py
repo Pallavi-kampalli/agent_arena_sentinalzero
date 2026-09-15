@@ -1,8 +1,7 @@
 import asyncio
-import copy
+
 import pytest
 from httpx import AsyncClient
-import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.models.task import Task
@@ -25,22 +24,84 @@ async def test_cross_team_isolation(client: AsyncClient, db_session: AsyncSessio
 
     # 2. Build world with identical customer and transaction IDs
     world_a = generate_world(seed=42)
-    world_a["customers"].append({"id": "CUS-SHARED-99", "name": "Alpha Customer", "tier": "pro", "region": "NA", "verification_status": "verified", "account_status": "active", "created_at": "2026-01-01T00:00:00Z"})
-    world_a["transactions"].append({"id": "TXN-SHARED-99", "customer_id": "CUS-SHARED-99", "amount": 100.0, "currency": "USD", "date": "2026-09-12T00:00:00Z", "status": "completed", "chargeback_status": "none", "under_fraud_investigation": False, "refund_status": "none", "refunded_amount": 0.0})
+    world_a["customers"].append(
+        {
+            "id": "CUS-SHARED-99",
+            "name": "Alpha Customer",
+            "tier": "pro",
+            "region": "NA",
+            "verification_status": "verified",
+            "account_status": "active",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    world_a["transactions"].append(
+        {
+            "id": "TXN-SHARED-99",
+            "customer_id": "CUS-SHARED-99",
+            "amount": 100.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
 
     world_b = generate_world(seed=42)
-    world_b["customers"].append({"id": "CUS-SHARED-99", "name": "Beta Customer", "tier": "enterprise", "region": "EU", "verification_status": "verified", "account_status": "active", "created_at": "2026-01-01T00:00:00Z"})
-    world_b["transactions"].append({"id": "TXN-SHARED-99", "customer_id": "CUS-SHARED-99", "amount": 100.0, "currency": "USD", "date": "2026-09-12T00:00:00Z", "status": "completed", "chargeback_status": "none", "under_fraud_investigation": False, "refund_status": "none", "refunded_amount": 0.0})
+    world_b["customers"].append(
+        {
+            "id": "CUS-SHARED-99",
+            "name": "Beta Customer",
+            "tier": "enterprise",
+            "region": "EU",
+            "verification_status": "verified",
+            "account_status": "active",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    world_b["transactions"].append(
+        {
+            "id": "TXN-SHARED-99",
+            "customer_id": "CUS-SHARED-99",
+            "amount": 100.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
 
-    task_a = Task(task_id="TASK-ISO-A", dataset="dev", family="refund_request", variant="normal", input_payload={"customer_id": "CUS-SHARED-99", "customer_message": "A"}, world_state_seed=world_a, ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]})
-    task_b = Task(task_id="TASK-ISO-B", dataset="dev", family="refund_request", variant="normal", input_payload={"customer_id": "CUS-SHARED-99", "customer_message": "B"}, world_state_seed=world_b, ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]})
+    task_a = Task(
+        task_id="TASK-ISO-A",
+        dataset="dev",
+        family="refund_request",
+        variant="normal",
+        input_payload={"customer_id": "CUS-SHARED-99", "customer_message": "A"},
+        world_state_seed=world_a,
+        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+    )
+    task_b = Task(
+        task_id="TASK-ISO-B",
+        dataset="dev",
+        family="refund_request",
+        variant="normal",
+        input_payload={"customer_id": "CUS-SHARED-99", "customer_message": "B"},
+        world_state_seed=world_b,
+        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+    )
 
     db_session.add(task_a)
     db_session.add(task_b)
     await db_session.commit()
 
     tool_service = ToolService(db_session, settings_service)
-    assign_a = await tool_service.assign_task(team_a.team_id, "TASK-ISO-A")
+    await tool_service.assign_task(team_a.team_id, "TASK-ISO-A")
     assign_b = await tool_service.assign_task(team_b.team_id, "TASK-ISO-B")
 
     headers_a = {"Authorization": f"Bearer {token_a}"}
@@ -91,10 +152,41 @@ async def test_concurrent_refund_attempts(client: AsyncClient, db_session: Async
 
     team, token = await register_team(db_session, "RaceTeam")
     world = generate_world(seed=42)
-    world["customers"].append({"id": "CUS-RACE-01", "name": "Race User", "tier": "pro", "region": "NA", "verification_status": "verified", "account_status": "active", "created_at": "2026-01-01T00:00:00Z"})
-    world["transactions"].append({"id": "TXN-RACE-01", "customer_id": "CUS-RACE-01", "amount": 100.0, "currency": "USD", "date": "2026-09-12T00:00:00Z", "status": "completed", "chargeback_status": "none", "under_fraud_investigation": False, "refund_status": "none", "refunded_amount": 0.0})
+    world["customers"].append(
+        {
+            "id": "CUS-RACE-01",
+            "name": "Race User",
+            "tier": "pro",
+            "region": "NA",
+            "verification_status": "verified",
+            "account_status": "active",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    world["transactions"].append(
+        {
+            "id": "TXN-RACE-01",
+            "customer_id": "CUS-RACE-01",
+            "amount": 100.0,
+            "currency": "USD",
+            "date": "2026-09-12T00:00:00Z",
+            "status": "completed",
+            "chargeback_status": "none",
+            "under_fraud_investigation": False,
+            "refund_status": "none",
+            "refunded_amount": 0.0,
+        }
+    )
 
-    task = Task(task_id="TASK-RACE-01", dataset="dev", family="refund_request", variant="normal", input_payload={"customer_id": "CUS-RACE-01", "customer_message": "Race"}, world_state_seed=world, ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]})
+    task = Task(
+        task_id="TASK-RACE-01",
+        dataset="dev",
+        family="refund_request",
+        variant="normal",
+        input_payload={"customer_id": "CUS-RACE-01", "customer_message": "Race"},
+        world_state_seed=world,
+        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+    )
     db_session.add(task)
     await db_session.commit()
 
@@ -139,7 +231,15 @@ async def test_dynamic_rate_limiter_setting(client: AsyncClient, db_session: Asy
 
     team, token = await register_team(db_session, "ThrottleTeam")
     world = generate_world(seed=42)
-    task = Task(task_id="TASK-THROTTLE-01", dataset="dev", family="refund_request", variant="normal", input_payload={"customer_id": "CUS-1001", "customer_message": "Hi"}, world_state_seed=world, ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]})
+    task = Task(
+        task_id="TASK-THROTTLE-01",
+        dataset="dev",
+        family="refund_request",
+        variant="normal",
+        input_payload={"customer_id": "CUS-1001", "customer_message": "Hi"},
+        world_state_seed=world,
+        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+    )
     db_session.add(task)
     await db_session.commit()
 
@@ -180,7 +280,15 @@ async def test_per_task_tool_call_budget(client: AsyncClient, db_session: AsyncS
 
     team, token = await register_team(db_session, "BudgetTeam")
     world = generate_world(seed=42)
-    task = Task(task_id="TASK-BUDGET-01", dataset="dev", family="refund_request", variant="normal", input_payload={"customer_id": "CUS-1001", "customer_message": "Hi"}, world_state_seed=world, ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]})
+    task = Task(
+        task_id="TASK-BUDGET-01",
+        dataset="dev",
+        family="refund_request",
+        variant="normal",
+        input_payload={"customer_id": "CUS-1001", "customer_message": "Hi"},
+        world_state_seed=world,
+        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+    )
     db_session.add(task)
     await db_session.commit()
 

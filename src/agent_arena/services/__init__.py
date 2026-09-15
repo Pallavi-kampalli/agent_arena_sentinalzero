@@ -1,21 +1,21 @@
-from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.auth_service import (
-    hash_token,
+    authenticate_bearer_token,
     create_bearer_token,
     decode_bearer_token,
-    register_team,
+    hash_token,
     regenerate_team_token,
-    authenticate_bearer_token,
+    register_team,
 )
 from agent_arena.services.dataset_service import DatasetService
+from agent_arena.services.settings_service import SettingsService
 
 __all__ = [
+    "DatasetService",
     "SettingsService",
-    "hash_token",
+    "authenticate_bearer_token",
     "create_bearer_token",
     "decode_bearer_token",
-    "register_team",
+    "hash_token",
     "regenerate_team_token",
-    "authenticate_bearer_token",
-    "DatasetService",
+    "register_team",
 ]

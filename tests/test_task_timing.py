@@ -1,8 +1,9 @@
-from datetime import datetime, timedelta, timezone
 import uuid
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from httpx import AsyncClient
 import sqlalchemy as sa
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.models.task import Task
@@ -52,7 +53,9 @@ async def timing_fixture(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_task_time_budget_enforcement_and_auto_timeout(client: AsyncClient, db_session: AsyncSession, timing_fixture):
+async def test_task_time_budget_enforcement_and_auto_timeout(
+    client: AsyncClient, db_session: AsyncSession, timing_fixture
+):
     team, token = timing_fixture
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -63,10 +66,10 @@ async def test_task_time_budget_enforcement_and_auto_timeout(client: AsyncClient
     task_id_1 = t1.json()["task_id"]
 
     # Manipulate assigned_at into the past (70s ago -> exceeds 60s budget)
-    assign_row = (await db_session.execute(
-        sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id_1)
-    )).scalar_one()
-    past_time = datetime.now(timezone.utc) - timedelta(seconds=70)
+    assign_row = (
+        await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id_1))
+    ).scalar_one()
+    past_time = datetime.now(UTC) - timedelta(seconds=70)
     assign_row.assigned_at = past_time
     await db_session.commit()
 
@@ -114,10 +117,10 @@ async def test_live_settings_time_budget_extension(client: AsyncClient, db_sessi
     task_id_1 = t1.json()["task_id"]
 
     # Manipulate assigned_at into the past (70s ago -> exceeds original 60s budget)
-    assign_row = (await db_session.execute(
-        sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id_1)
-    )).scalar_one()
-    assign_row.assigned_at = datetime.now(timezone.utc) - timedelta(seconds=70)
+    assign_row = (
+        await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id_1))
+    ).scalar_one()
+    assign_row.assigned_at = datetime.now(UTC) - timedelta(seconds=70)
     await db_session.commit()
 
     # Organizers extend live time budget to 300s mid-event

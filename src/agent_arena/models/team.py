@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,13 +17,15 @@ class Team(Base):
         default=uuid.uuid4,
     )
     team_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    members: Mapped[Optional[dict[str, Any] | list[Any]]] = mapped_column(PortableJSON, nullable=True)
-    github_repo_url: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
+    members: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(PortableJSON, nullable=True)
+    github_repo_url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     bearer_token_hash: Mapped[str] = mapped_column(sa.Text, nullable=False, index=True)
     token_version: Mapped[int] = mapped_column(sa.Integer, default=1, nullable=False)
     status: Mapped[str] = mapped_column(sa.Text, default="active", nullable=False)  # active | disqualified | suspended
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
 
     # Relationships
     submissions = relationship("Submission", back_populates="team", cascade="all, delete-orphan")

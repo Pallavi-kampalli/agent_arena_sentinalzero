@@ -1,9 +1,10 @@
+from agent_arena.schemas.auth import TokenClaims
 from agent_arena.schemas.settings import (
-    ScoringWeightsSchema,
-    ScoreAggregationEnum,
     CompetitionPhaseEnum,
-    SettingUpdatePayload,
+    ScoreAggregationEnum,
+    ScoringWeightsSchema,
     SettingAuditLogResponse,
+    SettingUpdatePayload,
     validate_setting_value,
 )
 from agent_arena.schemas.team import (
@@ -11,17 +12,16 @@ from agent_arena.schemas.team import (
     TeamRegisterResponse,
     TeamResponse,
 )
-from agent_arena.schemas.auth import TokenClaims
 
 __all__ = [
-    "ScoringWeightsSchema",
-    "ScoreAggregationEnum",
     "CompetitionPhaseEnum",
-    "SettingUpdatePayload",
+    "ScoreAggregationEnum",
+    "ScoringWeightsSchema",
     "SettingAuditLogResponse",
-    "validate_setting_value",
+    "SettingUpdatePayload",
     "TeamRegisterRequest",
     "TeamRegisterResponse",
     "TeamResponse",
     "TokenClaims",
+    "validate_setting_value",
 ]

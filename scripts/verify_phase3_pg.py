@@ -1,14 +1,11 @@
 import asyncio
-import copy
-from datetime import datetime, timezone
 import os
 import sys
-import time
 import uuid
 
 import httpx
-from httpx import ASGITransport
 import sqlalchemy as sa
+from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 sys.path.insert(0, os.path.abspath("src"))
@@ -16,7 +13,6 @@ sys.path.insert(0, os.path.abspath("src"))
 from agent_arena.api.app import create_app
 from agent_arena.api.deps import get_db_session
 from agent_arena.config import get_config
-from agent_arena.world.generator import generate_world
 from agent_arena.models import (
     Base,
     Submission,
@@ -27,7 +23,7 @@ from agent_arena.models import (
 )
 from agent_arena.services.auth_service import create_bearer_token, hash_token
 from agent_arena.services.settings_service import SettingsService
-from agent_arena.services.submission_service import SubmissionService
+from agent_arena.world.generator import generate_world
 
 
 async def main():
@@ -73,28 +69,32 @@ async def main():
             task_id = f"TASK-PG-{run_id}-{i:02d}"
             world = generate_world(seed=7000 + i)
             cust_id = f"CUS-PG-{run_id}-{i:02d}"
-            world["customers"].append({
-                "id": cust_id,
-                "name": f"Customer {i}",
-                "tier": "pro",
-                "region": "NA",
-                "verification_status": "verified",
-                "account_status": "active",
-                "created_at": "2026-01-01T00:00:00Z",
-            })
+            world["customers"].append(
+                {
+                    "id": cust_id,
+                    "name": f"Customer {i}",
+                    "tier": "pro",
+                    "region": "NA",
+                    "verification_status": "verified",
+                    "account_status": "active",
+                    "created_at": "2026-01-01T00:00:00Z",
+                }
+            )
             txn_id = f"TXN-PG-{run_id}-{i:02d}"
-            world["transactions"].append({
-                "id": txn_id,
-                "customer_id": cust_id,
-                "amount": 100.0,
-                "currency": "USD",
-                "date": "2026-09-12T00:00:00Z",
-                "status": "completed",
-                "chargeback_status": "none",
-                "under_fraud_investigation": False,
-                "refund_status": "none",
-                "refunded_amount": 0.0,
-            })
+            world["transactions"].append(
+                {
+                    "id": txn_id,
+                    "customer_id": cust_id,
+                    "amount": 100.0,
+                    "currency": "USD",
+                    "date": "2026-09-12T00:00:00Z",
+                    "status": "completed",
+                    "chargeback_status": "none",
+                    "under_fraud_investigation": False,
+                    "refund_status": "none",
+                    "refunded_amount": 0.0,
+                }
+            )
             task = Task(
                 task_id=task_id,
                 dataset="hidden",
@@ -102,7 +102,11 @@ async def main():
                 variant="normal",
                 input_payload={"customer_id": cust_id, "customer_message": f"Refund please for {txn_id}"},
                 world_state_seed=world,
-                ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+                ground_truth={
+                    "expected_resolution": "refund",
+                    "must_escalate": False,
+                    "required_evidence": ["DOC-1001"],
+                },
             )
             session.add(task)
 
@@ -111,6 +115,7 @@ async def main():
 
     # 3. Setup FastAPI App & AsyncClient
     import agent_arena.db as db_mod
+
     db_mod._engine = engine
     db_mod._session_maker = session_factory
 
@@ -151,7 +156,7 @@ async def main():
         # Step D: Execute Phase 2 Tool Calls on active task
         r_search = await client.post("/tools/search_knowledge", json={"query": "refund", "top_k": 2}, headers=headers)
         assert r_search.status_code == 200
-        print(f"[PASS] POST /tools/search_knowledge -> 200 OK")
+        print("[PASS] POST /tools/search_knowledge -> 200 OK")
 
         cust_1_id = t1_data["customer_id"]
         r_cust = await client.post("/tools/get_customer", json={"customer_id": cust_1_id}, headers=headers)
@@ -165,11 +170,17 @@ async def main():
             target_tx = txs[0]
             r_ref = await client.post(
                 "/tools/issue_refund",
-                json={"transaction_id": target_tx["id"], "amount": min(50.0, float(target_tx["amount"])), "reason": "Eligible customer refund"},
+                json={
+                    "transaction_id": target_tx["id"],
+                    "amount": min(50.0, float(target_tx["amount"])),
+                    "reason": "Eligible customer refund",
+                },
                 headers=headers,
             )
             assert r_ref.status_code == 200
-            print(f"[PASS] POST /tools/issue_refund -> 200 OK (result: {r_ref.json().get('status') or r_ref.json().get('error')})")
+            print(
+                f"[PASS] POST /tools/issue_refund -> 200 OK (result: {r_ref.json().get('status') or r_ref.json().get('error')})"
+            )
         else:
             r_ver = await client.post(
                 "/tools/request_verification",
@@ -177,7 +188,7 @@ async def main():
                 headers=headers,
             )
             assert r_ver.status_code == 200
-            print(f"[PASS] POST /tools/request_verification -> 200 OK")
+            print("[PASS] POST /tools/request_verification -> 200 OK")
 
         # Step E: POST /task/submit (Task 1)
         submit_1 = {
@@ -191,7 +202,7 @@ async def main():
         r_sub1 = await client.post("/task/submit", json=submit_1, headers=headers)
         assert r_sub1.status_code == 200
         assert r_sub1.json() == {"received": True, "task_id": task_1_id}
-        print(f"[PASS] POST /task/submit -> 200 OK (received: true, no oracle leakage)")
+        print("[PASS] POST /task/submit -> 200 OK (received: true, no oracle leakage)")
 
         # Step F: Status check
         r_st2 = await client.get(f"/submission/{sub_id}/status", headers=headers)
@@ -215,13 +226,13 @@ async def main():
         }
         r_sub2 = await client.post("/task/submit", json=submit_2, headers=headers)
         assert r_sub2.status_code == 200
-        print(f"[PASS] POST /task/submit -> 200 OK (Task 2 submitted)")
+        print("[PASS] POST /task/submit -> 200 OK (Task 2 submitted)")
 
         # Step H: All tasks completed -> starting another task returns 400
         r_t3 = await client.post("/task/start", headers=headers)
         assert r_t3.status_code == 400
         assert r_t3.json()["detail"]["error"] == "ALL_TASKS_COMPLETED"
-        print(f"[PASS] POST /task/start (all tasks completed) -> 400 ALL_TASKS_COMPLETED")
+        print("[PASS] POST /task/start (all tasks completed) -> 400 ALL_TASKS_COMPLETED")
 
         # Step I: POST /submission/{id}/finalize
         r_fin = await client.post(f"/submission/{sub_id}/finalize", headers=headers)
@@ -232,7 +243,7 @@ async def main():
         # Step J: Finalized submission blocks subsequent tool calls & task starts
         r_blocked_task = await client.post("/task/start", headers=headers)
         assert r_blocked_task.status_code == 409
-        print(f"[PASS] POST /task/start after finalize -> 409 SUBMISSION_ALREADY_FINALIZED")
+        print("[PASS] POST /task/start after finalize -> 409 SUBMISSION_ALREADY_FINALIZED")
 
     # 4. Direct PostgreSQL Verification
     print("\n--- Direct Database Inspection in PostgreSQL ---")
@@ -244,15 +255,19 @@ async def main():
         assert len(sub_row.per_task_results) == 2
         print(f"[PASS] submissions row confirmed completed with {len(sub_row.per_task_results)} task results.")
 
-        assign_rows = (await session.execute(
-            sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(sub_id))
-        )).scalars().all()
+        assign_rows = (
+            (await session.execute(sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(sub_id))))
+            .scalars()
+            .all()
+        )
         assert len(assign_rows) == 2
         print(f"[PASS] task_assignments rows verified in PostgreSQL (count={len(assign_rows)}).")
 
-        logs_count = (await session.execute(
-            sa.select(sa.func.count()).select_from(ToolCallLog).where(ToolCallLog.team_id == team_id)
-        )).scalar()
+        logs_count = (
+            await session.execute(
+                sa.select(sa.func.count()).select_from(ToolCallLog).where(ToolCallLog.team_id == team_id)
+            )
+        ).scalar()
         print(f"[PASS] tool_call_logs recorded in PostgreSQL (count={logs_count}).")
 
     await engine.dispose()

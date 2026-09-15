@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 from typing import Annotated
+
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 

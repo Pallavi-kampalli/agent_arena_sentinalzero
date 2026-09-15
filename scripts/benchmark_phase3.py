@@ -1,14 +1,12 @@
 import asyncio
-import copy
-from datetime import datetime, timezone
 import os
 import sys
 import time
 import uuid
 
 import httpx
-from httpx import ASGITransport
 import sqlalchemy as sa
+from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 if sys.platform == "win32":
@@ -19,18 +17,16 @@ sys.path.insert(0, os.path.abspath("src"))
 from agent_arena.api.app import create_app
 from agent_arena.api.deps import get_db_session
 from agent_arena.config import get_config
-from agent_arena.world.generator import generate_world
 from agent_arena.models import (
     Base,
     Submission,
     Task,
     TaskAssignment,
     Team,
-    ToolCallLog,
 )
 from agent_arena.services.auth_service import create_bearer_token, hash_token
 from agent_arena.services.settings_service import SettingsService
-from agent_arena.services.submission_service import SubmissionService
+from agent_arena.world.generator import generate_world
 
 NUM_TEAMS = 50
 
@@ -68,7 +64,9 @@ async def run_team_lifecycle(
 
     # 3. Read tool: search_knowledge
     t0 = time.perf_counter()
-    r_search = await client.post("/tools/search_knowledge", json={"query": "refund policy", "top_k": 3}, headers=headers)
+    r_search = await client.post(
+        "/tools/search_knowledge", json={"query": "refund policy", "top_k": 3}, headers=headers
+    )
     team_latencies.append((time.perf_counter() - t0) * 1000)
     assert r_search.status_code == 200, f"Team {team_idx} search failed: {r_search.text}"
 
@@ -114,12 +112,14 @@ async def run_team_lifecycle(
     team_latencies.append((time.perf_counter() - t0) * 1000)
     assert r_fin.status_code == 200, f"Team {team_idx} finalize failed: {r_fin.text}"
 
-    results.append({
-        "team_idx": team_idx,
-        "sub_id": sub_id,
-        "task_id": task_id,
-        "latencies": team_latencies,
-    })
+    results.append(
+        {
+            "team_idx": team_idx,
+            "sub_id": sub_id,
+            "task_id": task_id,
+            "latencies": team_latencies,
+        }
+    )
 
 
 async def main():
@@ -164,9 +164,9 @@ async def main():
             teams_data.append({"team_idx": i, "team": team, "token": token})
 
         # Ensure hidden pool has enough tasks
-        pool_count = (await session.execute(
-            sa.select(sa.func.count()).select_from(Task).where(Task.dataset == "hidden")
-        )).scalar() or 0
+        pool_count = (
+            await session.execute(sa.select(sa.func.count()).select_from(Task).where(Task.dataset == "hidden"))
+        ).scalar() or 0
         if pool_count < 1:
             for i in range(5):
                 world = generate_world(seed=8000 + i)
@@ -186,6 +186,7 @@ async def main():
 
     # 2. Setup FastAPI App & AsyncClient
     import agent_arena.db as db_mod
+
     db_mod._engine = engine
     db_mod._session_maker = session_factory
 
@@ -250,12 +251,14 @@ async def main():
             assert sub.per_task_results[0]["status"] == "completed"
 
             # Check assignment row exists
-            assign = (await session.execute(
-                sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(res["sub_id"]))
-            )).scalar_one_or_none()
+            assign = (
+                await session.execute(
+                    sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(res["sub_id"]))
+                )
+            ).scalar_one_or_none()
             assert assign is not None
 
-    print(f"[PASS] 100% of submissions transitioned to completed with verified task results.")
+    print("[PASS] 100% of submissions transitioned to completed with verified task results.")
     print("================================================================")
     print("  PHASE 3 50-TEAM CONCURRENT BENCHMARK COMPLETED SUCCESSFULLY!")
     print("================================================================")

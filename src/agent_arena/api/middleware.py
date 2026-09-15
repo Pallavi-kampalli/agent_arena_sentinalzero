@@ -1,10 +1,10 @@
-from typing import Callable
+from collections.abc import Callable
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from agent_arena.db import get_session_maker
-from agent_arena.logging import logger
 from agent_arena.services.auth_service import authenticate_bearer_token
 
 PUBLIC_PATHS = {
@@ -25,7 +25,7 @@ PUBLIC_PREFIXES = (
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
     """Middleware enforcing Bearer token authentication per PRD §4, §11, and §12.
-    
+
     Extracts Bearer token, validates signature, verifies token_version against the database,
     checks that team is active, and binds the authenticated team to request.state.
     """

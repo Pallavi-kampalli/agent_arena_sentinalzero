@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 
 class ResolutionType(str, Enum):
@@ -22,9 +22,9 @@ class ActionType(str, Enum):
 class EligibilityResult:
     is_eligible: bool
     status: str = "success"
-    reason: Optional[str] = None
-    policy_ref: Optional[str] = None
-    error: Optional[str] = None
+    reason: str | None = None
+    policy_ref: str | None = None
+    error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         if self.is_eligible:

@@ -1,7 +1,7 @@
 import copy
-from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Optional
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from agent_arena.domain.models import EligibilityResult
 
@@ -20,15 +20,15 @@ def parse_iso(dt_str: str) -> datetime:
     try:
         dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
     except Exception:
-        return datetime(2026, 1, 1, tzinfo=timezone.utc)
+        return datetime(2026, 1, 1, tzinfo=UTC)
 
 
-def get_authoritative_policy(world_state: dict[str, Any], category: str) -> Optional[dict[str, Any]]:
+def get_authoritative_policy(world_state: dict[str, Any], category: str) -> dict[str, Any] | None:
     """Returns the latest authoritative policy document for a given category.
-    
+
     If multiple documents exist (e.g. current vs stale/superseded), selects the one
     with the latest updated_at timestamp.
     """
@@ -53,7 +53,7 @@ def check_refund_eligibility(
     reason: str,
 ) -> EligibilityResult:
     """Canonical refund eligibility check per SupportOps_PS_v2.md §5.2.
-    
+
     Checks:
     1. Transaction existence and validity
     2. Not already refunded or refund amount doesn't exceed original charge
@@ -61,11 +61,7 @@ def check_refund_eligibility(
     4. Within refund policy time window (e.g. 30 days) from authoritative policy
     5. Amount within limits
     """
-    transactions = {
-        t.get("id"): t
-        for t in world_state.get("transactions", [])
-        if isinstance(t, dict) and "id" in t
-    }
+    transactions = {t.get("id"): t for t in world_state.get("transactions", []) if isinstance(t, dict) and "id" in t}
     tx = transactions.get(transaction_id)
     if not tx:
         return EligibilityResult(
@@ -139,18 +135,14 @@ def check_cancellation_eligibility(
     subscription_id: str,
 ) -> EligibilityResult:
     """Canonical cancellation eligibility check per SupportOps_PS_v2.md §5.3.
-    
+
     Checks:
     1. Subscription existence and ownership
     2. Active subscription status
     3. Contractual lock-in period (requires approved exception to cancel early)
     4. Unresolved billing dispute blocking cancellation
     """
-    subscriptions = {
-        s.get("id"): s
-        for s in world_state.get("subscriptions", [])
-        if isinstance(s, dict) and "id" in s
-    }
+    subscriptions = {s.get("id"): s for s in world_state.get("subscriptions", []) if isinstance(s, dict) and "id" in s}
     sub = subscriptions.get(subscription_id)
     if not sub:
         return EligibilityResult(
@@ -211,10 +203,10 @@ def check_escalation_validity(
     case_id: str,
     team: str,
     reason: str,
-    retrieved_evidence_ids: Optional[set[str] | list[str]] = None,
+    retrieved_evidence_ids: set[str] | list[str] | None = None,
 ) -> EligibilityResult:
     """Canonical escalation check per SupportOps_PS_v2.md §4.2, §5.3.
-    
+
     Must include a reason grounded in something retrievable (a policy ref or evidence ID).
     Empty or generic reasons ('customer mad', 'need help') are rejected.
     Keyword mentions ('fraud', 'chargeback') without citing retrievable evidence are strictly rejected.
@@ -271,10 +263,10 @@ def apply_action_to_world(
     world_state: dict[str, Any],
     action_type: str,
     params: dict[str, Any],
-    retrieved_evidence_ids: Optional[set[str] | list[str]] = None,
+    retrieved_evidence_ids: set[str] | list[str] | None = None,
 ) -> tuple[dict[str, Any], EligibilityResult]:
     """Applies an action to a working copy of world state.
-    
+
     Returns (mutated_world_state, eligibility_result).
     If ineligible, world state remains completely unmodified (PS §5.1).
     """
@@ -320,12 +312,14 @@ def apply_action_to_world(
         result = check_escalation_validity(state_copy, case_id, team, reason, retrieved_evidence_ids)
         if result.is_eligible:
             escalations = state_copy.setdefault("escalations", [])
-            escalations.append({
-                "case_id": case_id,
-                "team": team,
-                "reason": reason,
-                "timestamp": state_copy.get("current_date", "2026-09-15T00:00:00Z"),
-            })
+            escalations.append(
+                {
+                    "case_id": case_id,
+                    "team": team,
+                    "reason": reason,
+                    "timestamp": state_copy.get("current_date", "2026-09-15T00:00:00Z"),
+                }
+            )
         return state_copy if result.is_eligible else world_state, result
 
     elif action_type == "request_verification":
@@ -333,11 +327,13 @@ def apply_action_to_world(
         cust_id = params.get("customer_id", "")
         vtype = params.get("verification_type", "identity")
         requests = state_copy.setdefault("verification_requests", [])
-        requests.append({
-            "customer_id": cust_id,
-            "verification_type": vtype,
-            "timestamp": state_copy.get("current_date", "2026-09-15T00:00:00Z"),
-        })
+        requests.append(
+            {
+                "customer_id": cust_id,
+                "verification_type": vtype,
+                "timestamp": state_copy.get("current_date", "2026-09-15T00:00:00Z"),
+            }
+        )
         return state_copy, EligibilityResult(is_eligible=True, status="verification_requested")
 
     else:

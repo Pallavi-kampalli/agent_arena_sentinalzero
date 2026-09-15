@@ -1,9 +1,10 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
 import uuid
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from httpx import AsyncClient
 import sqlalchemy as sa
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.models.submission import Submission
@@ -48,27 +49,31 @@ async def setup_cross_lifecycle(db_session: AsyncSession):
     for i in range(3):
         task_id = f"TASK-REUSE-{i:03d}"
         world = generate_world(seed=9000 + i)
-        world["customers"].append({
-            "id": f"CUS-REUSE-{i}",
-            "name": f"Customer {i}",
-            "tier": "pro",
-            "region": "NA",
-            "verification_status": "verified",
-            "account_status": "active",
-            "created_at": "2026-01-01T00:00:00Z",
-        })
-        world["transactions"].append({
-            "id": f"TXN-REUSE-{i}",
-            "customer_id": f"CUS-REUSE-{i}",
-            "amount": 200.0,
-            "currency": "USD",
-            "date": "2026-09-12T00:00:00Z",
-            "status": "completed",
-            "chargeback_status": "none",
-            "under_fraud_investigation": False,
-            "refund_status": "none",
-            "refunded_amount": 0.0,
-        })
+        world["customers"].append(
+            {
+                "id": f"CUS-REUSE-{i}",
+                "name": f"Customer {i}",
+                "tier": "pro",
+                "region": "NA",
+                "verification_status": "verified",
+                "account_status": "active",
+                "created_at": "2026-01-01T00:00:00Z",
+            }
+        )
+        world["transactions"].append(
+            {
+                "id": f"TXN-REUSE-{i}",
+                "customer_id": f"CUS-REUSE-{i}",
+                "amount": 200.0,
+                "currency": "USD",
+                "date": "2026-09-12T00:00:00Z",
+                "status": "completed",
+                "chargeback_status": "none",
+                "under_fraud_investigation": False,
+                "refund_status": "none",
+                "refunded_amount": 0.0,
+            }
+        )
         task = Task(
             task_id=task_id,
             dataset="hidden",
@@ -130,12 +135,12 @@ async def test_model_b_task_reuse_across_teams(client: AsyncClient, db_session: 
     assert r_ref2.json()["transaction"]["refunded_amount"] == 75.0
 
     # Verify direct database isolation
-    a1 = (await db_session.execute(
-        sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(sub_id_1))
-    )).scalar_one()
-    a2 = (await db_session.execute(
-        sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(sub_id_2))
-    )).scalar_one()
+    a1 = (
+        await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(sub_id_1)))
+    ).scalar_one()
+    a2 = (
+        await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(sub_id_2)))
+    ).scalar_one()
 
     tx1 = next(t for t in a1.world_runtime_state["transactions"] if t["id"] == "TXN-REUSE-0")
     tx2 = next(t for t in a2.world_runtime_state["transactions"] if t["id"] == "TXN-REUSE-0")
@@ -143,16 +148,16 @@ async def test_model_b_task_reuse_across_teams(client: AsyncClient, db_session: 
     assert tx2["refunded_amount"] == 75.0
 
     # Verify seed immutability in tasks table
-    task_row = (await db_session.execute(
-        sa.select(Task).where(Task.task_id == "TASK-REUSE-000")
-    )).scalar_one()
+    task_row = (await db_session.execute(sa.select(Task).where(Task.task_id == "TASK-REUSE-000"))).scalar_one()
     seed_tx = next(t for t in task_row.world_state_seed["transactions"] if t["id"] == "TXN-REUSE-0")
     assert seed_tx["refunded_amount"] == 0.0
     assert seed_tx["refund_status"] == "none"
 
 
 @pytest.mark.asyncio
-async def test_task_timeout_does_not_expire_submission(client: AsyncClient, db_session: AsyncSession, setup_cross_lifecycle):
+async def test_task_timeout_does_not_expire_submission(
+    client: AsyncClient, db_session: AsyncSession, setup_cross_lifecycle
+):
     """Proves Task Timeout != Submission Expiration."""
     (team_1, token_1), _ = setup_cross_lifecycle
     headers = {"Authorization": f"Bearer {token_1}"}
@@ -164,10 +169,10 @@ async def test_task_timeout_does_not_expire_submission(client: AsyncClient, db_s
     task_id_1 = r_t1.json()["task_id"]
 
     # Manipulate task 1 assigned_at to 80 seconds in the past (> 60s budget)
-    assign_row = (await db_session.execute(
-        sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id_1)
-    )).scalar_one()
-    assign_row.assigned_at = datetime.now(timezone.utc) - timedelta(seconds=80)
+    assign_row = (
+        await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id_1))
+    ).scalar_one()
+    assign_row.assigned_at = datetime.now(UTC) - timedelta(seconds=80)
     await db_session.commit()
 
     # Task is timed out, but SUBMISSION REMAINS IN PROGRESS
@@ -208,7 +213,9 @@ async def test_task_timeout_does_not_expire_submission(client: AsyncClient, db_s
 
 
 @pytest.mark.asyncio
-async def test_competition_window_expires_submission(client: AsyncClient, db_session: AsyncSession, setup_cross_lifecycle):
+async def test_competition_window_expires_submission(
+    client: AsyncClient, db_session: AsyncSession, setup_cross_lifecycle
+):
     """Proves that competition freeze or end time expires the entire submission and blocks operations."""
     (team_1, token_1), _ = setup_cross_lifecycle
     headers = {"Authorization": f"Bearer {token_1}"}
@@ -233,7 +240,9 @@ async def test_competition_window_expires_submission(client: AsyncClient, db_ses
 
 
 @pytest.mark.asyncio
-async def test_no_resurrection_after_recorded_timeout(client: AsyncClient, db_session: AsyncSession, setup_cross_lifecycle):
+async def test_no_resurrection_after_recorded_timeout(
+    client: AsyncClient, db_session: AsyncSession, setup_cross_lifecycle
+):
     """Proves that a task recorded as timed_out can NEVER be resubmitted, even if the budget is later increased to 10,000s."""
     (team_1, token_1), _ = setup_cross_lifecycle
     headers = {"Authorization": f"Bearer {token_1}"}
@@ -243,10 +252,10 @@ async def test_no_resurrection_after_recorded_timeout(client: AsyncClient, db_se
     task_id = t1.json()["task_id"]
 
     # Expire task and trigger auto-marking
-    assign_row = (await db_session.execute(
-        sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id)
-    )).scalar_one()
-    assign_row.assigned_at = datetime.now(timezone.utc) - timedelta(seconds=80)
+    assign_row = (
+        await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id))
+    ).scalar_one()
+    assign_row.assigned_at = datetime.now(UTC) - timedelta(seconds=80)
     await db_session.commit()
 
     payload = {
@@ -274,7 +283,9 @@ async def test_no_resurrection_after_recorded_timeout(client: AsyncClient, db_se
 
 
 @pytest.mark.asyncio
-async def test_finalization_with_incomplete_and_timed_out_tasks(client: AsyncClient, db_session: AsyncSession, setup_cross_lifecycle):
+async def test_finalization_with_incomplete_and_timed_out_tasks(
+    client: AsyncClient, db_session: AsyncSession, setup_cross_lifecycle
+):
     """Proves that finalization distinguishes completed tasks from incomplete/timed-out tasks and never awards completion credit to uncompleted work."""
     (team_1, token_1), _ = setup_cross_lifecycle
     headers = {"Authorization": f"Bearer {token_1}"}

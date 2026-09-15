@@ -1,6 +1,7 @@
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
+
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +28,7 @@ class DatasetService:
         replace_existing: bool = True,
     ) -> dict[str, Any]:
         """Generates, validates, and inserts tasks into the PostgreSQL tasks table.
-        
+
         Pulls task count from settings table if not explicitly passed (PRD §2.2, §8, §12).
         Enforces complete 6x6 family x variant matrix coverage.
         Disjoint seed spaces: dev (1000+) vs hidden (50000+).
@@ -101,19 +102,15 @@ class DatasetService:
             for fam in FAMILIES:
                 for var in VARIANTS:
                     if matrix[fam][var] == 0:
-                        raise RuntimeError(
-                            f"6x6 matrix coverage failure: cell ({fam}, {var}) has 0 generated tasks."
-                        )
+                        raise RuntimeError(f"6x6 matrix coverage failure: cell ({fam}, {var}) has 0 generated tasks.")
 
         # 4. Load into PostgreSQL tasks table
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         loaded_count = 0
 
         if replace_existing:
             # Clean re-generation: delete previous tasks for this dataset
-            await self.session.execute(
-                sa.delete(Task).where(Task.dataset == dataset_type)
-            )
+            await self.session.execute(sa.delete(Task).where(Task.dataset == dataset_type))
         else:
             # Check for existing duplicate task_ids to reject cleanly and rollback
             existing_ids = await self.session.execute(

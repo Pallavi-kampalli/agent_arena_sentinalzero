@@ -1,10 +1,11 @@
 """Pydantic schemas for the 10 SupportOps tools (6 read tools, 4 action tools)."""
 
-from typing import Any, Optional
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # --- Read Tools ---
+
 
 class SearchKnowledgeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -26,7 +27,9 @@ class SearchKnowledgeResponse(BaseModel):
 
 class GetDocumentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    document_id: str = Field(..., min_length=1, max_length=100, description="Policy or document identifier (e.g. DOC-1001)")
+    document_id: str = Field(
+        ..., min_length=1, max_length=100, description="Policy or document identifier (e.g. DOC-1001)"
+    )
 
 
 class GetDocumentResponse(BaseModel):
@@ -45,8 +48,8 @@ class GetCustomerResponse(BaseModel):
 class GetTransactionsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     customer_id: str = Field(..., min_length=1, max_length=100, description="Customer ID")
-    start_date: Optional[str] = Field(default=None, max_length=50, description="ISO format start date (inclusive)")
-    end_date: Optional[str] = Field(default=None, max_length=50, description="ISO format end date (inclusive)")
+    start_date: str | None = Field(default=None, max_length=50, description="ISO format start date (inclusive)")
+    end_date: str | None = Field(default=None, max_length=50, description="ISO format end date (inclusive)")
 
 
 class GetTransactionsResponse(BaseModel):
@@ -59,7 +62,7 @@ class GetSubscriptionRequest(BaseModel):
 
 
 class GetSubscriptionResponse(BaseModel):
-    subscription: Optional[dict[str, Any]] = None
+    subscription: dict[str, Any] | None = None
 
 
 class GetPreviousCasesRequest(BaseModel):
@@ -73,6 +76,7 @@ class GetPreviousCasesResponse(BaseModel):
 
 
 # --- Action Tools ---
+
 
 class IssueRefundRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -90,17 +94,22 @@ class CancelSubscriptionRequest(BaseModel):
 class EscalateCaseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     case_id: str = Field(..., min_length=1, max_length=100, description="Case or transaction identifier")
-    team: str = Field(..., min_length=1, max_length=100, description="Target escalation team (e.g. billing_specialists)")
+    team: str = Field(
+        ..., min_length=1, max_length=100, description="Target escalation team (e.g. billing_specialists)"
+    )
     reason: str = Field(..., min_length=1, max_length=2000, description="Evidence-grounded rationale for escalation")
 
 
 class RequestVerificationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     customer_id: str = Field(..., min_length=1, max_length=100, description="Customer ID to verify")
-    verification_type: str = Field(default="identity", min_length=1, max_length=50, description="Type of verification challenge")
+    verification_type: str = Field(
+        default="identity", min_length=1, max_length=50, description="Type of verification challenge"
+    )
 
 
 # --- Success & Business Rejection Responses ---
+
 
 class RefundSuccessResponse(BaseModel):
     status: str = "refunded"
@@ -123,7 +132,7 @@ class RequestVerificationSuccessResponse(BaseModel):
 class IneligibleResponse(BaseModel):
     error: str = "INELIGIBLE"
     reason: str
-    policy_ref: Optional[str] = None
+    policy_ref: str | None = None
 
 
 class InvalidEscalationResponse(BaseModel):

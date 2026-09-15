@@ -1,10 +1,10 @@
 import copy
-from datetime import datetime, timezone
-from typing import Any, Optional
 import uuid
+from datetime import UTC, datetime
+from typing import Any
 
-from fastapi import HTTPException, status
 import sqlalchemy as sa
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -20,13 +20,13 @@ from agent_arena.services.settings_service import SettingsService
 def ensure_utc(dt: datetime) -> datetime:
     """Ensures a datetime object is timezone-aware in UTC."""
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 class SubmissionService:
     """Service managing the complete task and submission lifecycle.
-    
+
     Guarantees:
     - Finite state machine with persistent database transitions
     - Strict separation of Task Timeout (per-task) vs Submission Expiration (event-level)
@@ -43,9 +43,9 @@ class SubmissionService:
         self.session = session
         self.settings_service = settings_service
 
-    async def _check_competition_window(self, submission: Optional[Submission] = None) -> None:
+    async def _check_competition_window(self, submission: Submission | None = None) -> None:
         """Verifies that the competition phase and window permit submissions.
-        
+
         If the event window has closed or phase is frozen, transitions active submission to 'expired'.
         """
         phase = await self.settings_service.get("competition_phase", "build")
@@ -63,7 +63,7 @@ class SubmissionService:
 
         comp_end = await self.settings_service.get("competition_end_at", None)
         if comp_end:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if isinstance(comp_end, str):
                 end_dt = datetime.fromisoformat(comp_end.replace("Z", "+00:00"))
             else:
@@ -82,7 +82,7 @@ class SubmissionService:
 
     async def start_submission(self, team_id: uuid.UUID) -> dict[str, Any]:
         """Starts a new submission run for an authenticated team.
-        
+
         Serializes concurrent requests for the same team via shared in-process mutex
         and Level 1 lock on Team row (FOR UPDATE).
         """
@@ -92,11 +92,7 @@ class SubmissionService:
             await self._check_competition_window()
 
             # 1. Level 1 Lock: Team row
-            team_stmt = (
-                sa.select(Team)
-                .where(Team.team_id == team_id)
-                .with_for_update()
-            )
+            team_stmt = sa.select(Team).where(Team.team_id == team_id).with_for_update()
             team = (await self.session.execute(team_stmt)).scalar_one_or_none()
             if not team:
                 raise HTTPException(
@@ -110,9 +106,8 @@ class SubmissionService:
                 )
 
             # 2. Check if team already has an in_progress submission
-            active_sub_stmt = (
-                sa.select(Submission)
-                .where(Submission.team_id == team_id, Submission.status == "in_progress")
+            active_sub_stmt = sa.select(Submission).where(
+                Submission.team_id == team_id, Submission.status == "in_progress"
             )
             active_sub = (await self.session.execute(active_sub_stmt)).scalar_one_or_none()
             if active_sub:
@@ -127,11 +122,7 @@ class SubmissionService:
 
             # 3. Check live submission_limit_per_team setting
             limit = await self.settings_service.get("submission_limit_per_team", 5)
-            count_stmt = (
-                sa.select(sa.func.count())
-                .select_from(Submission)
-                .where(Submission.team_id == team_id)
-            )
+            count_stmt = sa.select(sa.func.count()).select_from(Submission).where(Submission.team_id == team_id)
             existing_count = (await self.session.execute(count_stmt)).scalar() or 0
             if existing_count >= limit:
                 raise HTTPException(
@@ -144,11 +135,7 @@ class SubmissionService:
 
             # 4. Check hidden task pool sufficiency (Model B: pool must have at least hidden_task_count task definitions)
             hidden_count = await self.settings_service.get("hidden_task_count", 200)
-            pool_stmt = (
-                sa.select(sa.func.count())
-                .select_from(Task)
-                .where(Task.dataset == "hidden")
-            )
+            pool_stmt = sa.select(sa.func.count()).select_from(Task).where(Task.dataset == "hidden")
             available_tasks = (await self.session.execute(pool_stmt)).scalar() or 0
             if available_tasks < hidden_count:
                 raise HTTPException(
@@ -166,7 +153,7 @@ class SubmissionService:
                 submission_id=submission_id,
                 team_id=team_id,
                 attempt_number=attempt_number,
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
                 status="in_progress",
                 per_task_results=[],
             )
@@ -181,7 +168,7 @@ class SubmissionService:
 
     async def start_next_task(self, team_id: uuid.UUID) -> dict[str, Any]:
         """Assigns the next unassigned task for this team's current submission.
-        
+
         Serializes concurrent task starts for the same submission via in-process mutex
         and Level 2 lock on Submission row (FOR UPDATE).
         """
@@ -229,7 +216,7 @@ class SubmissionService:
             # Check competition event window
             await self._check_competition_window(submission)
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             time_budget = await self.settings_service.get("time_budget_per_task_seconds", 180)
 
             # 2. Level 3 Lock: Latest TaskAssignment row
@@ -262,12 +249,14 @@ class SubmissionService:
                     else:
                         # Previous task timed out -> auto-mark timed_out in per_task_results
                         # NOTE: Task timeout does NOT expire the submission; team advances to next task
-                        per_task_results.append({
-                            "task_id": latest_assign.task_id,
-                            "status": "timed_out",
-                            "assigned_at": latest_assign.assigned_at.isoformat(),
-                            "timed_out_at": now.isoformat(),
-                        })
+                        per_task_results.append(
+                            {
+                                "task_id": latest_assign.task_id,
+                                "status": "timed_out",
+                                "assigned_at": latest_assign.assigned_at.isoformat(),
+                                "timed_out_at": now.isoformat(),
+                            }
+                        )
                         submission.per_task_results = per_task_results
                         flag_modified(submission, "per_task_results")
 
@@ -289,9 +278,8 @@ class SubmissionService:
                 )
 
             # 4. Pick next unassigned task from hidden pool (Model B: reusable tasks, scoped to THIS submission)
-            assigned_task_ids_subq = (
-                sa.select(TaskAssignment.task_id)
-                .where(TaskAssignment.submission_id == submission.submission_id)
+            assigned_task_ids_subq = sa.select(TaskAssignment.task_id).where(
+                TaskAssignment.submission_id == submission.submission_id
             )
             next_task_stmt = (
                 sa.select(Task)
@@ -329,7 +317,7 @@ class SubmissionService:
 
     async def submit_task(self, team_id: uuid.UUID, payload: TaskSubmitRequest) -> dict[str, Any]:
         """Submits agent decision and evidence for the currently active task.
-        
+
         Acquires locks in strict hierarchical order: Level 2 (Submission) -> Level 3 (TaskAssignment).
         Never leaks correctness, diffs, or ground truth in production mode.
         """
@@ -343,9 +331,14 @@ class SubmissionService:
             )
             submission = (await self.session.execute(sub_stmt)).scalar_one_or_none()
             if not submission:
-                last_sub = (await self.session.execute(
-                    sa.select(Submission).where(Submission.team_id == team_id).order_by(Submission.started_at.desc()).limit(1)
-                )).scalar_one_or_none()
+                last_sub = (
+                    await self.session.execute(
+                        sa.select(Submission)
+                        .where(Submission.team_id == team_id)
+                        .order_by(Submission.started_at.desc())
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
                 if last_sub and last_sub.status == "completed":
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
@@ -391,26 +384,34 @@ class SubmissionService:
                     if r.get("status") == "completed":
                         raise HTTPException(
                             status_code=status.HTTP_409_CONFLICT,
-                            detail={"error": "TASK_ALREADY_SUBMITTED", "message": f"Task '{payload.task_id}' has already been submitted."},
+                            detail={
+                                "error": "TASK_ALREADY_SUBMITTED",
+                                "message": f"Task '{payload.task_id}' has already been submitted.",
+                            },
                         )
                     elif r.get("status") == "timed_out":
                         raise HTTPException(
                             status_code=status.HTTP_409_CONFLICT,
-                            detail={"error": "TASK_TIMED_OUT", "message": f"Task '{payload.task_id}' has timed out and cannot be submitted."},
+                            detail={
+                                "error": "TASK_TIMED_OUT",
+                                "message": f"Task '{payload.task_id}' has timed out and cannot be submitted.",
+                            },
                         )
 
             # 5. Check wall-clock time budget against server time
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             time_budget = await self.settings_service.get("time_budget_per_task_seconds", 180)
             assign_time = ensure_utc(assignment.assigned_at)
             elapsed = (now - assign_time).total_seconds()
             if elapsed > time_budget:
-                per_task_results.append({
-                    "task_id": payload.task_id,
-                    "status": "timed_out",
-                    "assigned_at": assignment.assigned_at.isoformat(),
-                    "timed_out_at": now.isoformat(),
-                })
+                per_task_results.append(
+                    {
+                        "task_id": payload.task_id,
+                        "status": "timed_out",
+                        "assigned_at": assignment.assigned_at.isoformat(),
+                        "timed_out_at": now.isoformat(),
+                    }
+                )
                 submission.per_task_results = per_task_results
                 flag_modified(submission, "per_task_results")
                 await self.session.commit()
@@ -423,13 +424,15 @@ class SubmissionService:
                 )
 
             # 6. Valid completion: record in per_task_results
-            per_task_results.append({
-                "task_id": payload.task_id,
-                "status": "completed",
-                "assigned_at": assignment.assigned_at.isoformat(),
-                "submitted_at": now.isoformat(),
-                "submission_payload": payload.model_dump(),
-            })
+            per_task_results.append(
+                {
+                    "task_id": payload.task_id,
+                    "status": "completed",
+                    "assigned_at": assignment.assigned_at.isoformat(),
+                    "submitted_at": now.isoformat(),
+                    "submission_payload": payload.model_dump(),
+                }
+            )
             submission.per_task_results = per_task_results
             flag_modified(submission, "per_task_results")
             await self.session.commit()
@@ -455,7 +458,7 @@ class SubmissionService:
 
         hidden_count = await self.settings_service.get("hidden_task_count", 200)
         time_budget = await self.settings_service.get("time_budget_per_task_seconds", 180)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         results = sub.per_task_results or []
         tasks_completed = len([r for r in results if isinstance(r, dict) and r.get("status") == "completed"])
@@ -491,18 +494,14 @@ class SubmissionService:
 
     async def finalize_submission(self, team_id: uuid.UUID, submission_id: uuid.UUID) -> dict[str, Any]:
         """Finalizes an in-progress submission to completed state.
-        
+
         Acquires locks in strict order: Level 2 (Submission) -> Level 3 (TaskAssignment).
         Idempotent for already-completed submissions.
         """
         team_lock = await get_team_lock(team_id)
         async with team_lock:
             # 1. Level 2 Lock: Submission row
-            sub_stmt = (
-                sa.select(Submission)
-                .where(Submission.submission_id == submission_id)
-                .with_for_update()
-            )
+            sub_stmt = sa.select(Submission).where(Submission.submission_id == submission_id).with_for_update()
             sub = (await self.session.execute(sub_stmt)).scalar_one_or_none()
             if not sub or sub.team_id != team_id:
                 raise HTTPException(
@@ -517,15 +516,21 @@ class SubmissionService:
             if sub.status == "expired":
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail={"error": "SUBMISSION_EXPIRED", "message": "Submission has expired and cannot be finalized."},
+                    detail={
+                        "error": "SUBMISSION_EXPIRED",
+                        "message": "Submission has expired and cannot be finalized.",
+                    },
                 )
             if sub.status != "in_progress":
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail={"error": "INVALID_STATE_TRANSITION", "message": f"Cannot finalize submission in '{sub.status}' state."},
+                    detail={
+                        "error": "INVALID_STATE_TRANSITION",
+                        "message": f"Cannot finalize submission in '{sub.status}' state.",
+                    },
                 )
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             results = list(sub.per_task_results or [])
             finished_ids = {r["task_id"] for r in results if isinstance(r, dict) and "task_id" in r}
 
@@ -540,12 +545,14 @@ class SubmissionService:
             latest_assign = (await self.session.execute(assign_stmt)).scalar_one_or_none()
             if latest_assign and latest_assign.task_id not in finished_ids:
                 # Auto-mark any active unsubmitted task as timed_out
-                results.append({
-                    "task_id": latest_assign.task_id,
-                    "status": "timed_out",
-                    "assigned_at": latest_assign.assigned_at.isoformat(),
-                    "timed_out_at": now.isoformat(),
-                })
+                results.append(
+                    {
+                        "task_id": latest_assign.task_id,
+                        "status": "timed_out",
+                        "assigned_at": latest_assign.assigned_at.isoformat(),
+                        "timed_out_at": now.isoformat(),
+                    }
+                )
                 sub.per_task_results = results
                 flag_modified(sub, "per_task_results")
 

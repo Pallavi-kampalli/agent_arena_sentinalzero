@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,7 +30,7 @@ class SettingsAuditLog(Base):
         autoincrement=True,
     )
     key: Mapped[str] = mapped_column(sa.Text, nullable=False, index=True)
-    old_value: Mapped[Optional[Any]] = mapped_column(PortableJSON, nullable=True)
+    old_value: Mapped[Any | None] = mapped_column(PortableJSON, nullable=True)
     new_value: Mapped[Any] = mapped_column(PortableJSON, nullable=False)
     changed_by: Mapped[str] = mapped_column(sa.Text, nullable=False)
     changed_at: Mapped[datetime] = mapped_column(

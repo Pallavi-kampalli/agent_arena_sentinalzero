@@ -1,15 +1,17 @@
 """0001_initial_schema
 
 Revision ID: 0001
-Revises: 
+Revises:
 Create Date: 2026-09-15 00:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0001"
@@ -74,7 +76,12 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger().with_variant(sa.Integer, "sqlite"), primary_key=True, autoincrement=True),
         sa.Column("team_id", PortableUUID, sa.ForeignKey("teams.team_id", ondelete="CASCADE"), nullable=False),
         sa.Column("task_id", sa.Text(), sa.ForeignKey("tasks.task_id", ondelete="CASCADE"), nullable=False),
-        sa.Column("submission_id", PortableUUID, sa.ForeignKey("submissions.submission_id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "submission_id",
+            PortableUUID,
+            sa.ForeignKey("submissions.submission_id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("assigned_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("world_runtime_state", PortableJSON, nullable=False),
     )

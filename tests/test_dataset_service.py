@@ -8,7 +8,6 @@ from agent_arena.services.settings_service import SettingsService
 from agent_arena.world.generator import generate_world
 
 
-
 @pytest.mark.asyncio
 async def test_dataset_service_dev_generation(db_session: AsyncSession):
     """Verify generating and loading dev dataset into database using settings count."""
@@ -128,4 +127,3 @@ async def test_dataset_service_replace_existing_false_rejects_duplicates(db_sess
     # Verify original 12 tasks remain in DB intact
     res = await db_session.execute(sa.select(sa.func.count()).select_from(Task).where(Task.dataset == "dev"))
     assert res.scalar() == 12
-

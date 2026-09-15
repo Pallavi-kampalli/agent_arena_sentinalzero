@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,11 +24,13 @@ class Submission(Base):
     )
     attempt_number: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     started_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
-    status: Mapped[str] = mapped_column(sa.Text, default="in_progress", nullable=False)  # in_progress | completed | expired
-    per_task_results: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(PortableJSON, nullable=True)
-    aggregate_score: Mapped[Optional[float]] = mapped_column(sa.Numeric(precision=8, scale=4), nullable=True)
-    breakdown: Mapped[Optional[dict[str, Any]]] = mapped_column(PortableJSON, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(
+        sa.Text, default="in_progress", nullable=False
+    )  # in_progress | completed | expired
+    per_task_results: Mapped[list[dict[str, Any]] | None] = mapped_column(PortableJSON, nullable=True)
+    aggregate_score: Mapped[float | None] = mapped_column(sa.Numeric(precision=8, scale=4), nullable=True)
+    breakdown: Mapped[dict[str, Any] | None] = mapped_column(PortableJSON, nullable=True)
 
     # Relationships
     team = relationship("Team", back_populates="submissions")

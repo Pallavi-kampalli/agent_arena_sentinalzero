@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,7 +28,7 @@ class TaskAssignment(Base):
         nullable=False,
         index=True,
     )
-    submission_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    submission_id: Mapped[uuid.UUID | None] = mapped_column(
         PortableUUID,
         sa.ForeignKey("submissions.submission_id", ondelete="SET NULL"),
         nullable=True,

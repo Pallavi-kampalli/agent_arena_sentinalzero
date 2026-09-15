@@ -5,7 +5,7 @@ from agent_arena.tasks.validator import validate_task
 __all__ = [
     "FAMILIES",
     "VARIANTS",
-    "TaskGenerator",
     "ReferenceSolver",
+    "TaskGenerator",
     "validate_task",
 ]

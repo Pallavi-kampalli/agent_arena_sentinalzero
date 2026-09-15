@@ -1,8 +1,8 @@
 import copy
 import uuid
+
 import pytest
 from httpx import AsyncClient
-import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.models.task import Task
@@ -54,7 +54,9 @@ async def registered_team_and_tasks(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_task_start_without_submission_rejected(client: AsyncClient, db_session: AsyncSession, registered_team_and_tasks):
+async def test_task_start_without_submission_rejected(
+    client: AsyncClient, db_session: AsyncSession, registered_team_and_tasks
+):
     team, token = registered_team_and_tasks
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -65,7 +67,9 @@ async def test_task_start_without_submission_rejected(client: AsyncClient, db_se
 
 
 @pytest.mark.asyncio
-async def test_task_lifecycle_flow_and_zero_oracle_leakage(client: AsyncClient, db_session: AsyncSession, registered_team_and_tasks):
+async def test_task_lifecycle_flow_and_zero_oracle_leakage(
+    client: AsyncClient, db_session: AsyncSession, registered_team_and_tasks
+):
     team, token = registered_team_and_tasks
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -147,7 +151,9 @@ async def test_task_lifecycle_flow_and_zero_oracle_leakage(client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_cross_team_task_submit_spoofing(client: AsyncClient, db_session: AsyncSession, registered_team_and_tasks):
+async def test_cross_team_task_submit_spoofing(
+    client: AsyncClient, db_session: AsyncSession, registered_team_and_tasks
+):
     team_a, token_a = registered_team_and_tasks
 
     # Register Team B
@@ -170,7 +176,7 @@ async def test_cross_team_task_submit_spoofing(client: AsyncClient, db_session: 
     t_b = await client.post("/task/start", headers=headers_b)
     task_b_id = t_b.json()["task_id"]
 
-    # Team A has no active task -> attempts to submit Team B's task_id
+    # 1. Team A has no active task -> attempts to submit Team B's task_id -> rejected
     payload = {
         "task_id": task_b_id,
         "case_classification": {"category": "billing", "issue": "refund", "severity": "low"},
@@ -180,8 +186,29 @@ async def test_cross_team_task_submit_spoofing(client: AsyncClient, db_session: 
         "confidence": 0.9,
     }
     spoof_res = await client.post("/task/submit", json=payload, headers=headers_a)
-    # Must reject cleanly with 404 (or 403) without leaking anything
-    assert spoof_res.status_code in (404, 403)
+    assert spoof_res.status_code == 404
+    assert spoof_res.json()["detail"]["error"] == "NO_ACTIVE_SUBMISSION"
+
+    # 2. Team B completes task 0 and advances to task 1
+    sub_b = await client.post("/task/submit", json=payload, headers=headers_b)
+    assert sub_b.status_code == 200
+    t_b2 = await client.post("/task/start", headers=headers_b)
+    assert t_b2.status_code == 200
+    task_b2_id = t_b2.json()["task_id"]
+
+    # Team A starts submission and starts its own first task (TASK-HIDDEN-000)
+    await client.post("/submission/start", headers=headers_a)
+    t_a = await client.post("/task/start", headers=headers_a)
+    assert t_a.status_code == 200
+    assert t_a.json()["task_id"] != task_b2_id
+
+    # Team A attempts to submit Team B's active task (TASK-HIDDEN-001)
+    spoof_payload = copy.deepcopy(payload)
+    spoof_payload["task_id"] = task_b2_id
+    spoof_res2 = await client.post("/task/submit", json=spoof_payload, headers=headers_a)
+    assert spoof_res2.status_code == 404
+    assert spoof_res2.json()["detail"]["error"] == "TASK_NOT_FOUND"
+    assert "not the currently active task" in spoof_res2.json()["detail"]["message"]
 
 
 @pytest.mark.asyncio

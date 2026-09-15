@@ -1,6 +1,5 @@
-import pytest
-from agent_arena.world.generator import WorldGenerator, generate_world
 from agent_arena.domain.rules import parse_iso
+from agent_arena.world.generator import generate_world
 
 
 def test_world_generator_determinism():
@@ -21,8 +20,10 @@ def test_world_generator_seed_diversity():
     world_a = generate_world(seed=101)
     world_b = generate_world(seed=202)
 
-    assert world_a["customers"][0]["id"] != world_b["customers"][0]["id"] or \
-           world_a["customers"][0]["name"] != world_b["customers"][0]["name"]
+    assert (
+        world_a["customers"][0]["id"] != world_b["customers"][0]["id"]
+        or world_a["customers"][0]["name"] != world_b["customers"][0]["name"]
+    )
 
 
 def test_world_entities_structure():

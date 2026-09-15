@@ -1,8 +1,8 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_arena.models.setting import Setting, SettingsAuditLog
+from agent_arena.models.setting import SettingsAuditLog
 from agent_arena.services.settings_service import SettingsService
 
 

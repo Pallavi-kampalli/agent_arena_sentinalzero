@@ -1,8 +1,9 @@
 import asyncio
 import uuid
+
 import pytest
-from httpx import AsyncClient
 import sqlalchemy as sa
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.models.submission import Submission
@@ -53,7 +54,9 @@ async def concurrency_fixture(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_submission_start_limit_race(client: AsyncClient, db_session: AsyncSession, concurrency_fixture):
+async def test_concurrent_submission_start_limit_race(
+    client: AsyncClient, db_session: AsyncSession, concurrency_fixture
+):
     """10 simultaneous POST /submission/start calls from same team must result in exactly 1 active submission."""
     team, token = concurrency_fixture
     headers = {"Authorization": f"Bearer {token}"}
@@ -68,16 +71,16 @@ async def test_concurrent_submission_start_limit_race(client: AsyncClient, db_se
             assert code in (403, 409)
 
     # Database invariant: exactly 1 submission in DB
-    subs = (await db_session.execute(
-        sa.select(Submission).where(Submission.team_id == team.team_id)
-    )).scalars().all()
+    subs = (await db_session.execute(sa.select(Submission).where(Submission.team_id == team.team_id))).scalars().all()
     assert len(subs) == 1
     assert subs[0].attempt_number == 1
     assert subs[0].status == "in_progress"
 
 
 @pytest.mark.asyncio
-async def test_concurrent_task_start_no_duplicate_assignment(client: AsyncClient, db_session: AsyncSession, concurrency_fixture):
+async def test_concurrent_task_start_no_duplicate_assignment(
+    client: AsyncClient, db_session: AsyncSession, concurrency_fixture
+):
     """10 simultaneous POST /task/start calls must assign exactly 1 task."""
     team, token = concurrency_fixture
     headers = {"Authorization": f"Bearer {token}"}
@@ -98,9 +101,11 @@ async def test_concurrent_task_start_no_duplicate_assignment(client: AsyncClient
             assert code == 409  # TASK_IN_PROGRESS
 
     # Database invariant: exactly 1 task assignment created
-    assignments = (await db_session.execute(
-        sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(sub_id))
-    )).scalars().all()
+    assignments = (
+        (await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(sub_id))))
+        .scalars()
+        .all()
+    )
     assert len(assignments) == 1
 
 
@@ -133,11 +138,11 @@ async def test_concurrent_task_submit_race(client: AsyncClient, db_session: Asyn
             assert code in (404, 409)
 
     # Invariant: exactly 1 completion recorded
-    sub = (await db_session.execute(
-        sa.select(Submission).where(Submission.team_id == team.team_id)
-    )).scalar_one()
+    sub = (await db_session.execute(sa.select(Submission).where(Submission.team_id == team.team_id))).scalar_one()
     results = sub.per_task_results or []
-    completed = [r for r in results if isinstance(r, dict) and r.get("task_id") == task_id and r.get("status") == "completed"]
+    completed = [
+        r for r in results if isinstance(r, dict) and r.get("task_id") == task_id and r.get("status") == "completed"
+    ]
     assert len(completed) == 1
 
 
@@ -157,8 +162,8 @@ async def test_concurrent_finalize_race(client: AsyncClient, db_session: AsyncSe
         assert r.status_code == 200
         assert r.json()["status"] == "completed"
 
-    sub = (await db_session.execute(
-        sa.select(Submission).where(Submission.submission_id == uuid.UUID(sub_id))
-    )).scalar_one()
+    sub = (
+        await db_session.execute(sa.select(Submission).where(Submission.submission_id == uuid.UUID(sub_id)))
+    ).scalar_one()
     assert sub.status == "completed"
     assert sub.completed_at is not None

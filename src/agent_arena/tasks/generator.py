@@ -1,6 +1,6 @@
 import copy
-from datetime import datetime, timedelta, timezone
 import random
+from datetime import datetime, timedelta
 from typing import Any
 
 from agent_arena.tasks.solver import ReferenceSolver
@@ -95,7 +95,7 @@ class TaskGenerator:
 
     def _setup_duplicate_payment(self, world: dict, cust: dict, variant: str) -> tuple[dict, dict]:
         cust_id = cust["id"]
-        is_true_dup = (variant != "contradiction")
+        is_true_dup = variant != "contradiction"
         amount = 99.0
         now_dt = datetime.fromisoformat(world.get("current_date", "2026-09-15T00:00:00+00:00"))
 
@@ -157,8 +157,8 @@ class TaskGenerator:
         tx_id = f"TXN-REF-{self.rng.randint(1000, 9999)}"
 
         # If adversarial or contradiction, trigger chargeback investigation active (DOC-1842 §4)
-        has_chargeback = (variant in {"adversarial", "contradiction"})
-        is_stale_window = (variant == "stale")
+        has_chargeback = variant in {"adversarial", "contradiction"}
+        is_stale_window = variant == "stale"
 
         tx_date = now_dt - timedelta(days=45 if is_stale_window else 5)
 
@@ -192,7 +192,7 @@ class TaskGenerator:
         sub_id = f"SUB-CAN-{self.rng.randint(1000, 9999)}"
 
         # In contradiction or adversarial, lock-in is active without approved exception
-        is_locked = (variant in {"contradiction", "adversarial"})
+        is_locked = variant in {"contradiction", "adversarial"}
 
         sub = {
             "id": sub_id,
@@ -222,7 +222,7 @@ class TaskGenerator:
         amount = 249.0
         now_dt = datetime.fromisoformat(world.get("current_date", "2026-09-15T00:00:00+00:00"))
 
-        has_signed_pod = (variant != "normal")  # normal is lost in transit, others have signed POD
+        has_signed_pod = variant != "normal"  # normal is lost in transit, others have signed POD
         courier_doc_id = "DOC-2001"
 
         tx = {
@@ -242,7 +242,9 @@ class TaskGenerator:
         }
         world.setdefault("transactions", []).append(tx)
 
-        msg = f"My hardware kit from order {tx_id} never arrived! I checked my porch and nothing is there. Refund me now."
+        msg = (
+            f"My hardware kit from order {tx_id} never arrived! I checked my porch and nothing is there. Refund me now."
+        )
         meta = {
             "transaction_id": tx_id,
             "amount": amount,
@@ -254,9 +256,9 @@ class TaskGenerator:
 
     def _setup_account_lock_fraud(self, world: dict, cust: dict, variant: str) -> tuple[dict, dict]:
         cust_id = cust["id"]
-        is_confirmed_breach = (variant in {"contradiction", "adversarial"})
+        is_confirmed_breach = variant in {"contradiction", "adversarial"}
 
-        msg = f"I think my account was hacked! I received a weird notification and I'm very concerned."
+        msg = "I think my account was hacked! I received a weird notification and I'm very concerned."
         meta = {
             "is_confirmed_breach": is_confirmed_breach,
             "case_id": f"CASE-{cust_id}",
@@ -321,13 +323,15 @@ class TaskGenerator:
         if variant == "distractor":
             # Add irrelevant documents and transactions to test noise filtering
             for i in range(5):
-                world.setdefault("documents", []).append({
-                    "id": f"DOC-DISTRACT-{self.rng.randint(100, 999)}",
-                    "title": f"Irrelevant FAQ Article {i+1}",
-                    "category": "general",
-                    "updated_at": "2025-01-01T00:00:00Z",
-                    "content": "This article discusses employee parking and internal holiday calendars.",
-                })
+                world.setdefault("documents", []).append(
+                    {
+                        "id": f"DOC-DISTRACT-{self.rng.randint(100, 999)}",
+                        "title": f"Irrelevant FAQ Article {i + 1}",
+                        "category": "general",
+                        "updated_at": "2025-01-01T00:00:00Z",
+                        "content": "This article discusses employee parking and internal holiday calendars.",
+                    }
+                )
 
         elif variant == "adversarial":
             # Add high pressure and prompt injection attempts

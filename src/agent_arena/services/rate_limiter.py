@@ -1,7 +1,8 @@
 import uuid
-from datetime import datetime, timedelta, timezone
-from fastapi import HTTPException, status
+from datetime import UTC, datetime, timedelta
+
 import sqlalchemy as sa
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_arena.models.tool_call_log import ToolCallLog
@@ -25,7 +26,7 @@ class ToolLimiter:
         if limit <= 0:
             return
 
-        window_start = datetime.now(timezone.utc) - timedelta(seconds=60)
+        window_start = datetime.now(UTC) - timedelta(seconds=60)
         stmt = (
             sa.select(sa.func.count())
             .select_from(ToolCallLog)
@@ -98,7 +99,7 @@ class ToolLimiter:
         if rate_limit <= 0 and budget <= 0:
             return
 
-        window_start = datetime.now(timezone.utc) - timedelta(seconds=60)
+        window_start = datetime.now(UTC) - timedelta(seconds=60)
         stmt = (
             sa.select(
                 sa.func.count().filter(ToolCallLog.created_at >= window_start).label("rate_count"),
