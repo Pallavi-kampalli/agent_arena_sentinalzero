@@ -27,6 +27,13 @@ def main() -> None:
 
     try:
         with ToolsClient(base_url=base_url, token=token) as tools:
+            # 0. Ensure active submission exists (works in both mock simulator and production)
+            try:
+                tools.start_submission()
+            except ApiError as e:
+                if "ACTIVE_SUBMISSION_EXISTS" not in str(e):
+                    pass
+
             # 1. Start / assign task
             print("1. Requesting task assignment via POST /task/start...")
             task = tools.start_task()

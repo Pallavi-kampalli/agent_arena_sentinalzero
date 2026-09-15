@@ -26,7 +26,12 @@ htmlcov/
 # Database / SQLite
 *.db
 *.sqlite3
+backups/
 
 # OS
 Thumbs.db
 .DS_Store
+
+# Certificates and keys
+certs/*.key
+certs/*.crt

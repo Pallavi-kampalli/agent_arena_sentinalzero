@@ -13,9 +13,74 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d agent_arena"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    networks:
+      - agent_arena_net
+
+  migration:
+    build: .
+    container_name: agent_arena_migration
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgrespassword@postgres:5432/agent_arena
+      ENVIRONMENT: staging
+    command: ["alembic", "upgrade", "head"]
+    networks:
+      - agent_arena_net
+
+  api:
+    build: .
+    container_name: agent_arena_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgrespassword@postgres:5432/agent_arena
+      ADMIN_PANEL_SECRET: ${ADMIN_PANEL_SECRET:-dev-admin-secret-key-32-chars-min-for-agent-arena}
+      JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET:-dev-jwt-secret-key-32-chars-min-for-agent-arena}
+      ENVIRONMENT: ${ENVIRONMENT:-staging}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      PORT: 8000
+      REVEAL_GROUND_TRUTH: "false"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health/ready"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 5s
+    networks:
+      - agent_arena_net
+
+  proxy:
+    image: nginx:1.27-alpine
+    container_name: agent_arena_proxy
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      - agent_arena_net
+
+networks:
+  agent_arena_net:
+    driver: bridge
 
 volumes:
   postgres_data:

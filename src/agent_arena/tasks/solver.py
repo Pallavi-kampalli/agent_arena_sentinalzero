@@ -432,8 +432,9 @@ class ReferenceSolverParticipantAdapter:
             if isinstance(prev_res, dict):
                 prev_cases = prev_res.get("cases", [])
                 for pc in prev_cases:
-                    if "id" in pc:
-                        evidence.append(pc["id"])
+                    cid = pc.get("case_id") or pc.get("id")
+                    if cid:
+                        evidence.append(cid)
         except Exception:
             pass
 
@@ -479,7 +480,8 @@ class ReferenceSolverParticipantAdapter:
             }
         elif "previous" in msg or "wrong" in msg or "promised" in msg:
             family = "previous_agent_was_wrong"
-            case_id = prev_cases[0]["id"] if prev_cases else f"CASE-{task_id}"
+            first_case = prev_cases[0] if prev_cases else {}
+            case_id = first_case.get("case_id") or first_case.get("id") or f"CASE-{task_id}"
             tx_id = txs[0]["id"] if txs else ""
             meta = {"case_id": case_id, "transaction_id": tx_id}
         else:

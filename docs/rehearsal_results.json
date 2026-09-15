@@ -1,0 +1,264 @@
+{
+  "rehearsal_run_id": "REHEARSAL-D2706938",
+  "timestamp": "2026-09-15T08:14:49.027892+00:00",
+  "target_url": "https://arena.localtest.me",
+  "tasks_per_team": 12,
+  "teams": {
+    "alpha": {
+      "submission_id": "0b7c8112-b30f-42af-8019-214f8e4e9405",
+      "team_id": "a4449626-8c55-4c27-a4ec-e6200d82e318",
+      "name": "Alpha-Expert-REHEARSAL-D2706938",
+      "strategy": "ReferenceSolver (Phase 1 Canonical)",
+      "tasks_completed": 12,
+      "task_details": [
+        {
+          "task_id": "TASK-BENCH-0b285a-001",
+          "resolution": "refund",
+          "evidence_count": 4,
+          "duration_s": 0.057
+        },
+        {
+          "task_id": "TASK-BENCH-0b285a-002",
+          "resolution": "refund",
+          "evidence_count": 3,
+          "duration_s": 0.049
+        },
+        {
+          "task_id": "TASK-BENCH-ae9c43-001",
+          "resolution": "refund",
+          "evidence_count": 4,
+          "duration_s": 0.054
+        },
+        {
+          "task_id": "TASK-BENCH-ae9c43-002",
+          "resolution": "refund",
+          "evidence_count": 3,
+          "duration_s": 0.046
+        },
+        {
+          "task_id": "TASK-BENCH-f3641c-001",
+          "resolution": "refund",
+          "evidence_count": 4,
+          "duration_s": 0.053
+        },
+        {
+          "task_id": "TASK-BENCH-f3641c-002",
+          "resolution": "refund",
+          "evidence_count": 3,
+          "duration_s": 0.048
+        },
+        {
+          "task_id": "TASK-HIDDEN-0001",
+          "resolution": "refund",
+          "evidence_count": 10,
+          "duration_s": 0.09
+        },
+        {
+          "task_id": "TASK-HIDDEN-0002",
+          "resolution": "refund",
+          "evidence_count": 8,
+          "duration_s": 0.091
+        },
+        {
+          "task_id": "TASK-HIDDEN-0003",
+          "resolution": "deny",
+          "evidence_count": 7,
+          "duration_s": 0.075
+        },
+        {
+          "task_id": "TASK-HIDDEN-0004",
+          "resolution": "refund",
+          "evidence_count": 8,
+          "duration_s": 0.092
+        },
+        {
+          "task_id": "TASK-HIDDEN-0005",
+          "resolution": "escalate",
+          "evidence_count": 8,
+          "duration_s": 0.092
+        },
+        {
+          "task_id": "TASK-HIDDEN-0006",
+          "resolution": "escalate",
+          "evidence_count": 10,
+          "duration_s": 0.093
+        }
+      ],
+      "duration_seconds": 1.15,
+      "aggregate_score": 0.7616,
+      "dimension_scores": {}
+    },
+    "beta": {
+      "submission_id": "f183cd85-4690-4138-9428-4aa1855767e2",
+      "team_id": "037d85ee-b0f3-4bfb-bd59-81db630c3528",
+      "name": "Beta-Intermediate-REHEARSAL-D2706938",
+      "strategy": "Starter-Kit Participant Agent (Partial Edge Case Coverage)",
+      "tasks_completed": 12,
+      "task_details": [
+        {
+          "task_id": "TASK-BENCH-0b285a-001",
+          "resolution": "refund",
+          "evidence_count": 3,
+          "duration_s": 0.041
+        },
+        {
+          "task_id": "TASK-BENCH-0b285a-002",
+          "resolution": "deny",
+          "evidence_count": 1,
+          "duration_s": 0.027
+        },
+        {
+          "task_id": "TASK-BENCH-ae9c43-001",
+          "resolution": "refund",
+          "evidence_count": 3,
+          "duration_s": 0.038
+        },
+        {
+          "task_id": "TASK-BENCH-ae9c43-002",
+          "resolution": "deny",
+          "evidence_count": 1,
+          "duration_s": 0.023
+        },
+        {
+          "task_id": "TASK-BENCH-f3641c-001",
+          "resolution": "refund",
+          "evidence_count": 3,
+          "duration_s": 0.038
+        },
+        {
+          "task_id": "TASK-BENCH-f3641c-002",
+          "resolution": "deny",
+          "evidence_count": 1,
+          "duration_s": 0.023
+        },
+        {
+          "task_id": "TASK-HIDDEN-0001",
+          "resolution": "refund",
+          "evidence_count": 5,
+          "duration_s": 0.054
+        },
+        {
+          "task_id": "TASK-HIDDEN-0002",
+          "resolution": "refund",
+          "evidence_count": 5,
+          "duration_s": 0.053
+        },
+        {
+          "task_id": "TASK-HIDDEN-0003",
+          "resolution": "deny",
+          "evidence_count": 3,
+          "duration_s": 0.041
+        },
+        {
+          "task_id": "TASK-HIDDEN-0004",
+          "resolution": "refund",
+          "evidence_count": 5,
+          "duration_s": 0.052
+        },
+        {
+          "task_id": "TASK-HIDDEN-0005",
+          "resolution": "deny",
+          "evidence_count": 4,
+          "duration_s": 0.037
+        },
+        {
+          "task_id": "TASK-HIDDEN-0006",
+          "resolution": "escalate",
+          "evidence_count": 6,
+          "duration_s": 0.061
+        }
+      ],
+      "duration_seconds": 0.78,
+      "aggregate_score": 0.4646,
+      "dimension_scores": {}
+    },
+    "gamma": {
+      "submission_id": "ff251420-6309-483a-9f66-5c4aea344050",
+      "team_id": "4d735e5b-0957-406d-979e-5e0086d8a039",
+      "name": "Gamma-Naive-REHEARSAL-D2706938",
+      "strategy": "Naive Baseline (Zero Tool Calls)",
+      "tasks_completed": 12,
+      "task_details": [
+        {
+          "task_id": "TASK-BENCH-0b285a-001",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-BENCH-0b285a-002",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-BENCH-ae9c43-001",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-BENCH-ae9c43-002",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-BENCH-f3641c-001",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-BENCH-f3641c-002",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0001",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0002",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0003",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0004",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0005",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0006",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        }
+      ],
+      "duration_seconds": 0.28,
+      "aggregate_score": 0.1604,
+      "dimension_scores": {}
+    }
+  },
+  "score_separation_verified": true,
+  "leaderboard_ranking_verified": true,
+  "live_settings_zero_downtime_verified": true,
+  "status": "PASS"
+}
