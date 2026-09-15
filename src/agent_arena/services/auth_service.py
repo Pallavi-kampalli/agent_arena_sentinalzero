@@ -87,8 +87,12 @@ async def regenerate_team_token(
 async def authenticate_bearer_token(session: AsyncSession, raw_token: str) -> Team:
     """Validates token signature, token_version, hash, and team status.
     
+    Always validates directly against the database to ensure immediate token revocation
+    and immediate team suspension enforcement across all workers/processes (PRD §4, §11).
     Raises ValueError with specific message on failure.
     """
+    token_h = hash_token(raw_token)
+
     try:
         payload = decode_bearer_token(raw_token)
     except jwt.ExpiredSignatureError:
@@ -98,6 +102,7 @@ async def authenticate_bearer_token(session: AsyncSession, raw_token: str) -> Te
 
     team_id_str = payload.get("sub")
     claimed_version = payload.get("version")
+
     if not team_id_str or claimed_version is None:
         raise ValueError("MALFORMED_TOKEN_PAYLOAD")
 
@@ -106,23 +111,23 @@ async def authenticate_bearer_token(session: AsyncSession, raw_token: str) -> Te
     except (ValueError, TypeError):
         raise ValueError("INVALID_TEAM_ID_IN_TOKEN")
 
-    # Load team from database
+    # Load team from database (persistent source of truth across all workers)
     result = await session.execute(sa.select(Team).where(Team.team_id == team_id))
     team = result.scalar_one_or_none()
 
     if team is None:
         raise ValueError("TEAM_NOT_FOUND")
 
-    # Status check
+    # Status check (immediate disqualification/suspension enforcement)
     if team.status != "active":
         raise ValueError(f"TEAM_STATUS_{team.status.upper()}")
 
-    # Version check (revocation check)
+    # Version check (immediate revocation check on token regeneration)
     if team.token_version != claimed_version:
         raise ValueError("TOKEN_REVOKED")
 
     # Hash verification
-    if hash_token(raw_token) != team.bearer_token_hash:
+    if token_h != team.bearer_token_hash:
         raise ValueError("TOKEN_HASH_MISMATCH")
 
     return team
