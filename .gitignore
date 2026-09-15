@@ -1,3 +1,7 @@
+# ==============================================================================
+# Agent Arena — Git Ignore Configuration
+# ==============================================================================
+
 # Python
 __pycache__/
 *.py[cod]
@@ -6,32 +10,49 @@ __pycache__/
 dist/
 build/
 
-# Virtual Environment
+# Virtual Environments
 .venv/
 env/
 venv/
 
-# Environment variables
+# Environment Variables & Secrets
 .env
+.env.*
+!.env.example
 
-# Pytest / coverage
+# Pytest, Coverage, Static Analysis Caches
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 
-# IDE
-.vscode/
-.idea/
+# Logs
+*.log
 
-# Database / SQLite
-*.db
-*.sqlite3
-backups/
-
-# OS
-Thumbs.db
+# Temporary & Editor Files
+*.tmp
+*.bak
+*.swp
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
 
-# Certificates and keys
-certs/*.key
-certs/*.crt
+# Backups & Archives
+backups/
+*.sql
+*.dump
+*.tar
+*.tar.gz
+
+# Certificates & Keys
+certs/
+*.crt
+*.key
+*.pem
+
+# Local Databases & SQLite
+*.db
+*.sqlite
+*.sqlite3

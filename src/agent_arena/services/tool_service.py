@@ -73,7 +73,7 @@ class ToolService:
                 stmt = (
                     sa.select(TaskAssignment)
                     .where(TaskAssignment.submission_id == sub.submission_id)
-                    .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                    .order_by(TaskAssignment.id.desc())
                     .limit(1)
                     .with_for_update()
                 )
@@ -81,7 +81,7 @@ class ToolService:
                 stmt = (
                     sa.select(TaskAssignment)
                     .where(TaskAssignment.team_id == team_id)
-                    .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                    .order_by(TaskAssignment.id.desc())
                     .limit(1)
                     .with_for_update()
                 )
@@ -89,7 +89,7 @@ class ToolService:
             stmt = (
                 sa.select(TaskAssignment)
                 .where(TaskAssignment.team_id == team_id)
-                .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                .order_by(TaskAssignment.id.desc())
                 .limit(1)
             )
 

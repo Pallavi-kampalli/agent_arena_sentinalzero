@@ -223,7 +223,7 @@ class SubmissionService:
             latest_assign_stmt = (
                 sa.select(TaskAssignment)
                 .where(TaskAssignment.submission_id == submission.submission_id)
-                .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                .order_by(TaskAssignment.id.desc())
                 .limit(1)
                 .with_for_update()
             )
@@ -298,6 +298,10 @@ class SubmissionService:
                 )
 
             # 5. Create new TaskAssignment with isolated deep copy of world_state_seed
+            if latest_assign and latest_assign.assigned_at:
+                latest_utc = ensure_utc(latest_assign.assigned_at)
+                if now < latest_utc:
+                    now = latest_utc
             new_assignment = TaskAssignment(
                 team_id=team_id,
                 task_id=next_task.task_id,
@@ -356,7 +360,7 @@ class SubmissionService:
             assign_stmt = (
                 sa.select(TaskAssignment)
                 .where(TaskAssignment.submission_id == submission.submission_id)
-                .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                .order_by(TaskAssignment.id.desc())
                 .limit(1)
                 .with_for_update()
             )
@@ -470,7 +474,7 @@ class SubmissionService:
             assign_stmt = (
                 sa.select(TaskAssignment)
                 .where(TaskAssignment.submission_id == submission_id)
-                .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                .order_by(TaskAssignment.id.desc())
                 .limit(1)
             )
             latest_assign = (await self.session.execute(assign_stmt)).scalar_one_or_none()
@@ -538,7 +542,7 @@ class SubmissionService:
             assign_stmt = (
                 sa.select(TaskAssignment)
                 .where(TaskAssignment.submission_id == submission_id)
-                .order_by(TaskAssignment.assigned_at.desc(), TaskAssignment.id.desc())
+                .order_by(TaskAssignment.id.desc())
                 .limit(1)
                 .with_for_update()
             )

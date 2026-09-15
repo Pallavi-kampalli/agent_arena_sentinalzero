@@ -1,4 +1,4 @@
-# Agent Arena — Phase 5: Admin Control Plane Guide
+# Agent Arena — Admin Control Plane Guide
 
 ## 1. Overview & Architectural Role
 

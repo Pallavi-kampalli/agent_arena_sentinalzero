@@ -1,17 +1,58 @@
-.git
+# ==============================================================================
+# Agent Arena — Docker Build Ignore Configuration
+# ==============================================================================
+
+# Version Control
+.git/
 .gitignore
+.github/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Python Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Testing, Analysis & Coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+tests/
+
+# Environment Variables & Secrets
 .env
 .env.*
-.venv
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache
-.ruff_cache
-.mypy_cache
+!.env.example
+
+# Backups & Dumps
 backups/
-tests/
-starter-kit/
+*.sql
+*.dump
+*.tar
+*.tar.gz
+
+# Certificates
+certs/
+*.crt
+*.key
+*.pem
+
+# Editor & OS Artifacts
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Documentation & Participant Artifacts (not needed in runtime container)
 docs/
+starter-kit/
 *.md

@@ -1,220 +1,184 @@
 {
-  "rehearsal_run_id": "REHEARSAL-D2706938",
-  "timestamp": "2026-09-15T08:14:49.027892+00:00",
-  "target_url": "https://arena.localtest.me",
+  "rehearsal_run_id": "REHEARSAL-43DD0D98",
+  "timestamp": "2026-09-15T14:40:12.105257+00:00",
+  "target_url": "http://localhost:8000",
   "tasks_per_team": 12,
   "teams": {
     "alpha": {
-      "submission_id": "0b7c8112-b30f-42af-8019-214f8e4e9405",
-      "team_id": "a4449626-8c55-4c27-a4ec-e6200d82e318",
-      "name": "Alpha-Expert-REHEARSAL-D2706938",
+      "submission_id": "b7496106-5235-4c6a-9718-2453602d56a9",
+      "team_id": "0ccf49a0-269c-42ef-b8db-3e36237647a6",
+      "name": "Alpha-Expert-REHEARSAL-43DD0D98",
       "strategy": "ReferenceSolver (Phase 1 Canonical)",
       "tasks_completed": 12,
       "task_details": [
         {
-          "task_id": "TASK-BENCH-0b285a-001",
-          "resolution": "refund",
-          "evidence_count": 4,
-          "duration_s": 0.057
-        },
-        {
-          "task_id": "TASK-BENCH-0b285a-002",
-          "resolution": "refund",
-          "evidence_count": 3,
-          "duration_s": 0.049
-        },
-        {
-          "task_id": "TASK-BENCH-ae9c43-001",
-          "resolution": "refund",
-          "evidence_count": 4,
-          "duration_s": 0.054
-        },
-        {
-          "task_id": "TASK-BENCH-ae9c43-002",
-          "resolution": "refund",
-          "evidence_count": 3,
-          "duration_s": 0.046
-        },
-        {
-          "task_id": "TASK-BENCH-f3641c-001",
-          "resolution": "refund",
-          "evidence_count": 4,
-          "duration_s": 0.053
-        },
-        {
-          "task_id": "TASK-BENCH-f3641c-002",
-          "resolution": "refund",
-          "evidence_count": 3,
-          "duration_s": 0.048
-        },
-        {
           "task_id": "TASK-HIDDEN-0001",
           "resolution": "refund",
           "evidence_count": 10,
-          "duration_s": 0.09
+          "duration_s": 0.237
         },
         {
           "task_id": "TASK-HIDDEN-0002",
           "resolution": "refund",
           "evidence_count": 8,
-          "duration_s": 0.091
+          "duration_s": 0.237
         },
         {
           "task_id": "TASK-HIDDEN-0003",
           "resolution": "deny",
           "evidence_count": 7,
-          "duration_s": 0.075
+          "duration_s": 0.195
         },
         {
           "task_id": "TASK-HIDDEN-0004",
           "resolution": "refund",
           "evidence_count": 8,
-          "duration_s": 0.092
+          "duration_s": 0.281
         },
         {
           "task_id": "TASK-HIDDEN-0005",
           "resolution": "escalate",
           "evidence_count": 8,
-          "duration_s": 0.092
+          "duration_s": 0.213
         },
         {
           "task_id": "TASK-HIDDEN-0006",
           "resolution": "escalate",
           "evidence_count": 10,
-          "duration_s": 0.093
+          "duration_s": 0.257
+        },
+        {
+          "task_id": "TASK-HIDDEN-0007",
+          "resolution": "refund",
+          "evidence_count": 9,
+          "duration_s": 0.209
+        },
+        {
+          "task_id": "TASK-HIDDEN-0008",
+          "resolution": "refund",
+          "evidence_count": 9,
+          "duration_s": 0.272
+        },
+        {
+          "task_id": "TASK-HIDDEN-0009",
+          "resolution": "refund",
+          "evidence_count": 7,
+          "duration_s": 0.23
+        },
+        {
+          "task_id": "TASK-HIDDEN-0010",
+          "resolution": "refund",
+          "evidence_count": 9,
+          "duration_s": 0.209
+        },
+        {
+          "task_id": "TASK-HIDDEN-0011",
+          "resolution": "deny",
+          "evidence_count": 8,
+          "duration_s": 0.222
+        },
+        {
+          "task_id": "TASK-HIDDEN-0012",
+          "resolution": "escalate",
+          "evidence_count": 11,
+          "duration_s": 0.222
         }
       ],
-      "duration_seconds": 1.15,
-      "aggregate_score": 0.7616,
+      "duration_seconds": 25.43,
+      "aggregate_score": 0.5905,
       "dimension_scores": {}
     },
     "beta": {
-      "submission_id": "f183cd85-4690-4138-9428-4aa1855767e2",
-      "team_id": "037d85ee-b0f3-4bfb-bd59-81db630c3528",
-      "name": "Beta-Intermediate-REHEARSAL-D2706938",
+      "submission_id": "b450d8a2-2c8a-4604-a4f9-5b27f8a1b9ad",
+      "team_id": "0164804a-738a-40e1-b814-c2fe79528e7c",
+      "name": "Beta-Intermediate-REHEARSAL-43DD0D98",
       "strategy": "Starter-Kit Participant Agent (Partial Edge Case Coverage)",
       "tasks_completed": 12,
       "task_details": [
         {
-          "task_id": "TASK-BENCH-0b285a-001",
-          "resolution": "refund",
-          "evidence_count": 3,
-          "duration_s": 0.041
-        },
-        {
-          "task_id": "TASK-BENCH-0b285a-002",
-          "resolution": "deny",
-          "evidence_count": 1,
-          "duration_s": 0.027
-        },
-        {
-          "task_id": "TASK-BENCH-ae9c43-001",
-          "resolution": "refund",
-          "evidence_count": 3,
-          "duration_s": 0.038
-        },
-        {
-          "task_id": "TASK-BENCH-ae9c43-002",
-          "resolution": "deny",
-          "evidence_count": 1,
-          "duration_s": 0.023
-        },
-        {
-          "task_id": "TASK-BENCH-f3641c-001",
-          "resolution": "refund",
-          "evidence_count": 3,
-          "duration_s": 0.038
-        },
-        {
-          "task_id": "TASK-BENCH-f3641c-002",
-          "resolution": "deny",
-          "evidence_count": 1,
-          "duration_s": 0.023
-        },
-        {
           "task_id": "TASK-HIDDEN-0001",
           "resolution": "refund",
           "evidence_count": 5,
-          "duration_s": 0.054
+          "duration_s": 0.153
         },
         {
           "task_id": "TASK-HIDDEN-0002",
           "resolution": "refund",
           "evidence_count": 5,
-          "duration_s": 0.053
+          "duration_s": 0.123
         },
         {
           "task_id": "TASK-HIDDEN-0003",
           "resolution": "deny",
           "evidence_count": 3,
-          "duration_s": 0.041
+          "duration_s": 0.117
         },
         {
           "task_id": "TASK-HIDDEN-0004",
           "resolution": "refund",
           "evidence_count": 5,
-          "duration_s": 0.052
+          "duration_s": 0.112
         },
         {
           "task_id": "TASK-HIDDEN-0005",
           "resolution": "deny",
           "evidence_count": 4,
-          "duration_s": 0.037
+          "duration_s": 0.194
         },
         {
           "task_id": "TASK-HIDDEN-0006",
           "resolution": "escalate",
           "evidence_count": 6,
-          "duration_s": 0.061
+          "duration_s": 0.137
+        },
+        {
+          "task_id": "TASK-HIDDEN-0007",
+          "resolution": "refund",
+          "evidence_count": 5,
+          "duration_s": 0.131
+        },
+        {
+          "task_id": "TASK-HIDDEN-0008",
+          "resolution": "refund",
+          "evidence_count": 5,
+          "duration_s": 0.138
+        },
+        {
+          "task_id": "TASK-HIDDEN-0009",
+          "resolution": "deny",
+          "evidence_count": 3,
+          "duration_s": 0.092
+        },
+        {
+          "task_id": "TASK-HIDDEN-0010",
+          "resolution": "refund",
+          "evidence_count": 5,
+          "duration_s": 0.199
+        },
+        {
+          "task_id": "TASK-HIDDEN-0011",
+          "resolution": "deny",
+          "evidence_count": 5,
+          "duration_s": 0.099
+        },
+        {
+          "task_id": "TASK-HIDDEN-0012",
+          "resolution": "escalate",
+          "evidence_count": 6,
+          "duration_s": 0.155
         }
       ],
-      "duration_seconds": 0.78,
-      "aggregate_score": 0.4646,
+      "duration_seconds": 24.4,
+      "aggregate_score": 0.3788,
       "dimension_scores": {}
     },
     "gamma": {
-      "submission_id": "ff251420-6309-483a-9f66-5c4aea344050",
-      "team_id": "4d735e5b-0957-406d-979e-5e0086d8a039",
-      "name": "Gamma-Naive-REHEARSAL-D2706938",
+      "submission_id": "bf769d81-733d-4a41-ac3b-30ae589ff696",
+      "team_id": "19f02775-4472-4786-9d73-6fa0b5d865c3",
+      "name": "Gamma-Naive-REHEARSAL-43DD0D98",
       "strategy": "Naive Baseline (Zero Tool Calls)",
       "tasks_completed": 12,
       "task_details": [
-        {
-          "task_id": "TASK-BENCH-0b285a-001",
-          "resolution": "deny",
-          "evidence_count": 0,
-          "duration_s": 0.0
-        },
-        {
-          "task_id": "TASK-BENCH-0b285a-002",
-          "resolution": "deny",
-          "evidence_count": 0,
-          "duration_s": 0.0
-        },
-        {
-          "task_id": "TASK-BENCH-ae9c43-001",
-          "resolution": "deny",
-          "evidence_count": 0,
-          "duration_s": 0.0
-        },
-        {
-          "task_id": "TASK-BENCH-ae9c43-002",
-          "resolution": "deny",
-          "evidence_count": 0,
-          "duration_s": 0.0
-        },
-        {
-          "task_id": "TASK-BENCH-f3641c-001",
-          "resolution": "deny",
-          "evidence_count": 0,
-          "duration_s": 0.0
-        },
-        {
-          "task_id": "TASK-BENCH-f3641c-002",
-          "resolution": "deny",
-          "evidence_count": 0,
-          "duration_s": 0.0
-        },
         {
           "task_id": "TASK-HIDDEN-0001",
           "resolution": "deny",
@@ -250,10 +214,46 @@
           "resolution": "deny",
           "evidence_count": 0,
           "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0007",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0008",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0009",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0010",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0011",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
+        },
+        {
+          "task_id": "TASK-HIDDEN-0012",
+          "resolution": "deny",
+          "evidence_count": 0,
+          "duration_s": 0.0
         }
       ],
-      "duration_seconds": 0.28,
-      "aggregate_score": 0.1604,
+      "duration_seconds": 22.67,
+      "aggregate_score": 0.2062,
       "dimension_scores": {}
     }
   },

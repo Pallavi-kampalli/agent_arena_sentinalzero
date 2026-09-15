@@ -10,19 +10,11 @@ Agent Arena SupportOps operates on a containerized, self-hosted Docker Compose a
 
 ```
                     +------------------------------------------+
-                    |    Public Internet / Client Agents       |
-                    |         (Port 80 / 443 with TLS)         |
+                    |             LOCAL PARTICIPANT            |
+                    |         BASE_URL=http://localhost:8000   |
                     +--------------------+---------------------+
                                          |
-                                         v
-                    +------------------------------------------+
-                    |   Reverse Proxy (Nginx 1.27 Alpine)      |
-                    |  - Port 80: HTTP -> HTTPS 301 Redirect   |
-                    |  - Port 443: TLS 1.2/1.3 Termination     |
-                    |  - Host: arena.localtest.me / arena.org  |
-                    |  - Forwarded headers & SNI validation    |
-                    +--------------------+---------------------+
-                                         | (Internal docker net)
+                                         | HTTP (Port 8000)
                                          v
                     +------------------------------------------+
                     |        Agent Arena API Service           |
@@ -30,14 +22,14 @@ Agent Arena SupportOps operates on a containerized, self-hosted Docker Compose a
                     |  - Non-root user 'appuser' (UID 10001)   |
                     |  - In-process mutexes & hierarchical     |
                     |    row locks (Team -> Sub -> Task)       |
-                    |  - Port: 8000 (Internal network only)    |
+                    |  - Port: 8000 (localhost:8000)           |
                     +--------------------+---------------------+
                                          |
                                          v
                     +------------------------------------------+
                     |       PostgreSQL 16 Engine               |
                     |  - Image: postgres:16-alpine             |
-                    |  - Port: 5432 (Internal network only)    |
+                    |  - Port: 5432 (Internal docker network)  |
                     |  - Persistent Named Volume:              |
                     |      'postgres_data'                     |
                     |  - Strict ACID isolation (SERIALIZABLE   |
@@ -47,7 +39,7 @@ Agent Arena SupportOps operates on a containerized, self-hosted Docker Compose a
 
 ### Key Architectural Invariants
 1. **Single Worker (`--workers 1`)**: Concurrency control uses in-process asyncio locks coupled with PostgreSQL `SELECT ... FOR UPDATE` rows. Running with 1 worker ensures hierarchical mutexes remain globally serialized within the container. Note: This architecture implements robust Disaster Recovery (DR) and operational crash resilience rather than multi-worker High Availability (HA).
-2. **Reverse Proxy TLS Termination**: Nginx 1.27 serves as public entrypoint, enforcing HTTPS via 301 redirects on port 80 and terminating TLS on port 443 with valid Subject Alternative Names (`arena.localtest.me`, `arena.competition.org`).
+2. **Direct Local HTTP Entrypoint**: The primary participant and operator entrypoint is `http://localhost:8000`. No reverse proxies, TLS certificates, custom CAs, or DNS modifications are required.
 3. **Deterministic Migration Container**: The `migration` container runs `alembic upgrade head` to completion before the `api` service is permitted to start.
 4. **Database Readiness Decoupling**: Liveness (`/health`) checks the web server process; deep readiness (`/health/ready`) executes `SELECT 1` against PostgreSQL and returns 503 during database outages.
 5. **Volume Persistence**: PostgreSQL stores data in the external named volume `postgres_data`, surviving container destroys, image updates, and host reboots.
@@ -83,8 +75,8 @@ JWT_SIGNING_SECRET=w34T_yU9xB_SupportOps_JWT_2026_SigningSecret_Production!
 # Network & Host Binding
 PORT=8000
 ENVIRONMENT=production
-CORS_ORIGINS=https://arena.competition.org,https://admin.competition.org,https://arena.localtest.me
-ALLOWED_HOSTS=arena.competition.org,arena.localtest.me,localhost,127.0.0.1
+CORS_ORIGINS=http://localhost:3000,http://localhost:8000
+ALLOWED_HOSTS=localhost,127.0.0.1
 
 # Competition Gating
 REVEAL_GROUND_TRUTH=false
@@ -105,29 +97,23 @@ cp .env.example .env
 # Edit .env and supply genuine production secrets (>= 32 chars, H >= 3.0 bits/char)
 nano .env
 
-# 3. Generate TLS Certificates for Reverse Proxy
-python scripts/generate_tls_cert.py
-# Generates certs/arena.key and certs/arena.crt with SANs:
-# arena.localtest.me, arena.competition.org, localhost, 127.0.0.1
-
-# 4. Build containers
+# 3. Build containers
 docker compose build
 
-# 5. Launch PostgreSQL and run automated Alembic migrations
+# 4. Launch PostgreSQL and run automated Alembic migrations
 docker compose up -d postgres
 # Wait for postgres healthcheck
 docker compose ps
 
-# 6. Launch the complete stack (API, Nginx Proxy, PostgreSQL)
+# 5. Launch the complete stack (API, PostgreSQL)
 docker compose up -d
 
-# 7. Verify container status
+# 6. Verify container status
 docker compose ps
 # Expected:
 # agent_arena_postgres   Up (healthy)
 # agent_arena_migration  Exited (0)
-# agent_arena_api        Up (healthy)
-# agent_arena_proxy      Up (ports 0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp)
+# agent_arena_api        Up (healthy) (port 0.0.0.0:8000->8000/tcp)
 ```
 
 ---
@@ -144,23 +130,17 @@ docker compose ps
 
 ### Diagnostic Commands
 ```bash
-# Check process liveness via reverse proxy (verifies TLS termination)
-curl -s --cacert certs/arena.crt https://arena.localtest.me/health | jq .
+# Check process liveness
+curl -s http://localhost:8000/health | jq .
 
 # Check database readiness (returns 503 if DB is disconnected)
-curl -s -i --cacert certs/arena.crt https://arena.localtest.me/health/ready
-
-# Check HTTP -> HTTPS 301 redirection
-curl -I http://arena.localtest.me/health
+curl -s -i http://localhost:8000/health/ready
 
 # Check comprehensive admin operational metrics
-curl -s --cacert certs/arena.crt -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" https://arena.localtest.me/admin/health | jq .
+curl -s -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" http://localhost:8000/admin/health | jq .
 
 # View live application logs
 docker compose logs -f api
-
-# View reverse proxy logs
-docker compose logs -f proxy
 
 # View database query logs and connection counts
 docker compose logs -f postgres
@@ -168,16 +148,16 @@ docker compose logs -f postgres
 
 ---
 
-## 5. Initial Seeding & Configuration
+## 5. Administrative Bootstrap & Configuration Verification
 
-Before teams register, verify or run the administrative seeding script:
+Before teams register, verify administrative bootstrap configuration and API accessibility:
 
 ```bash
-# Run admin seeding script
+# Run admin bootstrap verification script
 python scripts/seed_admin.py
 
 # Verify current settings
-curl -s --cacert certs/arena.crt -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" https://arena.localtest.me/admin/settings | jq .
+curl -s -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" http://localhost:8000/admin/settings | jq .
 ```
 
 ### Canonical Production Settings
@@ -198,7 +178,7 @@ Teams must be registered via the Admin API. Each registration produces a unique 
 
 ### Single Team Registration
 ```bash
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/teams \
+curl -X POST http://localhost:8000/admin/teams \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{
@@ -219,7 +199,7 @@ Response:
 
 ### Bulk Team Import (CSV)
 ```bash
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/teams/bulk-import \
+curl -X POST http://localhost:8000/admin/teams/bulk-import \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{
@@ -230,7 +210,7 @@ curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/teams/bul
 ### Token Regeneration (Credential Reset)
 If a team leaks their token:
 ```bash
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/teams/{team_id}/regenerate-token \
+curl -X POST http://localhost:8000/admin/teams/{team_id}/regenerate-token \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET"
 ```
 
@@ -251,7 +231,7 @@ The competition progresses through 5 strict, irreversible phases:
 ### 2. Phase: `build` (Event Active)
 ```bash
 # Transition competition to build phase
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competition/phase \
+curl -X POST http://localhost:8000/admin/competition/phase \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"new_phase": "build"}'
@@ -262,7 +242,7 @@ curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competiti
 ### 3. Phase: `frozen` (Competition Window Closes)
 ```bash
 # Freeze submissions at the deadline
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competition/phase \
+curl -X POST http://localhost:8000/admin/competition/phase \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"new_phase": "frozen"}'
@@ -273,7 +253,7 @@ curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competiti
 ### 4. Phase: `evaluating`
 ```bash
 # Transition to evaluating phase for official scoring
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competition/phase \
+curl -X POST http://localhost:8000/admin/competition/phase \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"new_phase": "evaluating"}'
@@ -283,7 +263,7 @@ curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competiti
 
 ### 5. Phase: `results_published`
 ```bash
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competition/phase \
+curl -X POST http://localhost:8000/admin/competition/phase \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"new_phase": "results_published"}'
@@ -298,19 +278,19 @@ All platform limits and budgets can be dynamically adjusted without restarting c
 
 ```bash
 # Adjust time budget per task (e.g., extend to 240 seconds)
-curl -X PUT --cacert certs/arena.crt https://arena.localtest.me/admin/settings/time_budget_per_task_seconds \
+curl -X PUT http://localhost:8000/admin/settings/time_budget_per_task_seconds \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"value": 240}'
 
 # Adjust submission limit per team (e.g., increase from 5 to 7)
-curl -X PUT --cacert certs/arena.crt https://arena.localtest.me/admin/settings/submission_limit_per_team \
+curl -X PUT http://localhost:8000/admin/settings/submission_limit_per_team \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"value": 7}'
 
 # Inspect settings audit log (shows who changed what and when)
-curl -s --cacert certs/arena.crt -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" https://arena.localtest.me/admin/settings/audit-logs | jq .
+curl -s -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" http://localhost:8000/admin/settings/audit-logs | jq .
 ```
 
 ---
@@ -323,7 +303,7 @@ curl -s --cacert certs/arena.crt -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" https:
 1. Verify token was supplied: `Authorization: Bearer <token>`.
 2. Inspect team status:
    ```bash
-   curl -s --cacert certs/arena.crt -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" https://arena.localtest.me/admin/teams/{team_id} | jq .status
+   curl -s -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" http://localhost:8000/admin/teams/{team_id} | jq .status
    ```
 3. If token lost, regenerate token and send via secure channel.
 
@@ -373,7 +353,7 @@ If the API container crashes or hangs:
 docker compose restart api
 
 # Verify recovery
-curl -s --cacert certs/arena.crt https://arena.localtest.me/health/ready
+curl -s http://localhost:8000/health/ready
 ```
 
 ---
@@ -384,13 +364,13 @@ curl -s --cacert certs/arena.crt https://arena.localtest.me/health/ready
 If a team is hammering the API or violating rate limits:
 ```bash
 # Suspend team immediately (blocks all API calls)
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/teams/{team_id}/status \
+curl -X POST http://localhost:8000/admin/teams/{team_id}/status \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"status": "suspended"}'
 
 # Or permanently disqualify:
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/teams/{team_id}/status \
+curl -X POST http://localhost:8000/admin/teams/{team_id}/status \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"status": "disqualified"}'
@@ -399,7 +379,7 @@ curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/teams/{te
 ### Runbook B: High Latency / Connection Exhaustion
 1. Check tool logs for slowest tools:
    ```bash
-   curl -s --cacert certs/arena.crt -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" https://arena.localtest.me/admin/monitoring/tool-logs?limit=50 | jq .
+   curl -s -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" http://localhost:8000/admin/monitoring/tool-logs?limit=50 | jq .
    ```
 2. Check PostgreSQL connection pool:
    ```bash
@@ -414,7 +394,7 @@ At the end of the competition window:
 
 ```bash
 # 1. Freeze submissions
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competition/phase \
+curl -X POST http://localhost:8000/admin/competition/phase \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"new_phase": "frozen"}'
@@ -423,13 +403,13 @@ curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competiti
 # (Or trigger score on specific submissions via POST /admin/submissions/{submission_id}/score)
 
 # 3. Export authoritative Leaderboard
-curl -s --cacert certs/arena.crt -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" https://arena.localtest.me/admin/leaderboard/export > final_leaderboard.csv
+curl -s -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" http://localhost:8000/admin/leaderboard/export > final_leaderboard.csv
 
 # 4. View Top 10 Leaderboard
-curl -s --cacert certs/arena.crt -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" https://arena.localtest.me/admin/leaderboard | jq .leaderboard[:10]
+curl -s -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" http://localhost:8000/admin/leaderboard | jq .leaderboard[:10]
 
 # 5. Publish Final Results
-curl -X POST --cacert certs/arena.crt https://arena.localtest.me/admin/competition/phase \
+curl -X POST http://localhost:8000/admin/competition/phase \
   -H "X-Admin-Secret: $ADMIN_PANEL_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"new_phase": "results_published"}'

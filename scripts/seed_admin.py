@@ -1,5 +1,6 @@
 import asyncio
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,10 +17,10 @@ from agent_arena.config import get_config  # noqa: E402
 
 
 async def seed_admin(target_url: str | None = None) -> bool:
-    """Idempotently initializes and verifies the administrative account.
+    """Idempotently validates and bootstraps administrative configuration and audit logs.
 
     1. Validates configured ADMIN_PANEL_SECRET entropy and presence.
-    2. Writes/verifies administrative bootstrap record in audit_logs.
+    2. Writes/verifies administrative bootstrap record in settings_audit_log.
     3. Verifies administrative access against the running API endpoint.
     """
     config = get_config()
@@ -74,7 +75,64 @@ async def seed_admin(target_url: str | None = None) -> bool:
                 print(f"[PASS] Administrative bootstrap record already exists (audit_log_id={existing}).")
         await engine.dispose()
     except Exception as e:
-        print(f"[WARN] Database direct audit recording skipped/failed: {e}")
+        # Fallback to docker compose exec for isolated containerized PostgreSQL
+        try:
+            sql_check = "SELECT id FROM settings_audit_log WHERE key = 'admin_bootstrap' LIMIT 1;"
+            check_res = subprocess.run(
+                [
+                    "docker",
+                    "compose",
+                    "exec",
+                    "-T",
+                    "postgres",
+                    "psql",
+                    "-U",
+                    "postgres",
+                    "-d",
+                    "agent_arena",
+                    "-t",
+                    "-c",
+                    sql_check,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if check_res.returncode == 0 and check_res.stdout.strip():
+                print(
+                    f"[PASS] Administrative bootstrap record already exists (audit_log_id={check_res.stdout.strip()})."
+                )
+            else:
+                now_str = datetime.now(timezone.utc).isoformat()
+                sql_insert = (
+                    "INSERT INTO settings_audit_log (key, old_value, new_value, changed_by, changed_at) "
+                    f"VALUES ('admin_bootstrap', 'null'::jsonb, '{{\"status\": \"initialized\"}}'::jsonb, 'system_init', '{now_str}');"
+                )
+                insert_res = subprocess.run(
+                    [
+                        "docker",
+                        "compose",
+                        "exec",
+                        "-T",
+                        "postgres",
+                        "psql",
+                        "-U",
+                        "postgres",
+                        "-d",
+                        "agent_arena",
+                        "-c",
+                        sql_insert,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if insert_res.returncode == 0:
+                    print("[PASS] Recorded initial 'admin_bootstrap' audit log entry via container.")
+                else:
+                    print(f"[WARN] Database audit recording skipped: {e}")
+        except Exception:
+            print(f"[WARN] Database direct audit recording skipped/failed: {e}")
 
     # 3. Verify Administrative HTTP Access against Live API
     print("Verifying administrative authentication against GET /admin/health...")

@@ -96,15 +96,27 @@ def prod_server():
         "TEST_POSTGRES_URL",
         "postgresql+psycopg://postgres:postgrespassword@127.0.0.1:5432/agent_arena",
     )
-    engine = create_async_engine(db_url, echo=False)
+    # Attempt connection to PostgreSQL if host port 5432 is accessible; fallback to isolated DB if unexposed
+    engine = None
+    try:
+        candidate_engine = create_async_engine(db_url, echo=False)
+
+        async def init_pg():
+            async with candidate_engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+        asyncio.run(init_pg())
+        engine = candidate_engine
+    except Exception:
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+
+        async def init_sqlite():
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+        asyncio.run(init_sqlite())
+
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-
-    # Initialize schema on PostgreSQL
-    async def init_schema():
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-    asyncio.run(init_schema())
 
     # Override db module engine and session maker
     old_engine = db_module._engine

@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from agent_arena.config import AppConfig
 
-TARGET_URL = os.environ.get("PRODUCTION_URL", "http://127.0.0.1:8000").rstrip("/")
+TARGET_URL = os.environ.get("PRODUCTION_URL", "http://localhost:8000").rstrip("/")
 ADMIN_SECRET = os.environ.get("ADMIN_PANEL_SECRET", "dev-admin-secret-key-32-chars-min-for-agent-arena")
 
 
@@ -227,13 +227,19 @@ def test_smoke_live_settings_update_and_revert(client):
     assert r_revert.json()["new_value"] == 200
 
 
-def test_smoke_proxy_headers_and_security(client):
-    """Validates that proxy forwarded headers are accepted cleanly without breaking auth or routing."""
-    headers = {
-        "X-Forwarded-Proto": "https",
-        "X-Forwarded-For": "203.0.113.195",
-        "X-Forwarded-Host": "arena.competition.org",
-    }
-    r = client.get("/health", headers=headers)
-    assert r.status_code == 200
-    assert r.json()["status"] == "ok"
+def test_smoke_leaderboard_standings(client):
+    """Validates that the leaderboard and export endpoints return valid standings and tiebreak ordering."""
+    headers = {"X-Admin-Secret": ADMIN_SECRET}
+
+    # 1. JSON Leaderboard
+    r_lb = client.get("/admin/leaderboard", headers=headers)
+    assert r_lb.status_code == 200
+    lb_data = r_lb.json()
+    assert "leaderboard" in lb_data
+    assert isinstance(lb_data["leaderboard"], list)
+
+    # 2. CSV Leaderboard Export
+    r_exp = client.get("/admin/leaderboard/export", headers=headers)
+    assert r_exp.status_code == 200
+    assert "text/csv" in r_exp.headers.get("content-type", "")
+    assert "Team Name" in r_exp.text

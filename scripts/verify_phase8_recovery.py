@@ -22,12 +22,9 @@ sys.path.insert(0, str(ROOT_DIR / "scripts"))
 from backup_db import backup_database  # noqa: E402
 from restore_db import restore_database  # noqa: E402
 
-BASE_URL = os.getenv("BASE_URL", "https://arena.localtest.me").rstrip("/")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
 ADMIN_SECRET = os.getenv("ADMIN_PANEL_SECRET", "dev-admin-secret-key-32-chars-min-for-agent-arena")
 ADMIN_HEADERS = {"X-Admin-Secret": ADMIN_SECRET}
-
-CERT_PATH = ROOT_DIR / "certs" / "arena.crt"
-VERIFY = str(CERT_PATH) if CERT_PATH.exists() else True
 
 
 def wait_for_ready(timeout_seconds: float = 30.0, expect_status: int = 200) -> bool:
@@ -35,7 +32,7 @@ def wait_for_ready(timeout_seconds: float = 30.0, expect_status: int = 200) -> b
     t0 = time.time()
     while time.time() - t0 < timeout_seconds:
         try:
-            r = httpx.get(f"{BASE_URL}/health/ready", timeout=2.0, verify=VERIFY)
+            r = httpx.get(f"{BASE_URL}/health/ready", timeout=2.0)
             if r.status_code == expect_status:
                 return True
         except Exception:
@@ -47,7 +44,7 @@ def wait_for_ready(timeout_seconds: float = 30.0, expect_status: int = 200) -> b
 
 def get_admin_stats() -> dict:
     """Fetches baseline metrics from admin health and settings endpoints."""
-    with httpx.Client(base_url=BASE_URL, timeout=10.0, verify=VERIFY) as client:
+    with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
         r_health = client.get("/admin/health", headers=ADMIN_HEADERS)
         r_health.raise_for_status()
         r_settings = client.get("/admin/settings", headers=ADMIN_HEADERS)
@@ -106,7 +103,7 @@ def main() -> None:
         print("  + Verifying deep readiness (/health/ready) fails during database outage...")
         readiness_failed = False
         try:
-            r_ready = httpx.get(f"{BASE_URL}/health/ready", timeout=3.0, verify=VERIFY)
+            r_ready = httpx.get(f"{BASE_URL}/health/ready", timeout=3.0)
             if r_ready.status_code == 503:
                 readiness_failed = True
                 print(f"    [OK] /health/ready returned expected HTTP 503 ({r_ready.json()})")
@@ -119,7 +116,7 @@ def main() -> None:
         # 2. Liveness (/health) MUST still respond (process is alive)
         print("  + Verifying process liveness (/health) remains responsive...")
         try:
-            r_live = httpx.get(f"{BASE_URL}/health", timeout=3.0, verify=VERIFY)
+            r_live = httpx.get(f"{BASE_URL}/health", timeout=3.0)
             print(f"    [OK] /health status: {r_live.status_code} ({r_live.json().get('status')})")
             assert r_live.status_code == 200, "Liveness failed during db pause"
         except Exception as e:

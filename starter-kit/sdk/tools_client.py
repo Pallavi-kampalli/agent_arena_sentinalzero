@@ -33,14 +33,11 @@ class ToolsClient:
         base_url: str | None = None,
         token: str | None = None,
         timeout: float = 30.0,
-        verify: bool | str | None = None,
     ):
         raw_url = base_url or os.getenv("BASE_URL") or "http://localhost:8000"
         self.base_url = raw_url.rstrip("/")
         self.token = token or os.getenv("BEARER_TOKEN") or "dev-practice-token"
         self.timeout = timeout
-        if verify is None:
-            verify = os.getenv("SSL_CERT_FILE") or True
         self._client = httpx.Client(
             base_url=self.base_url,
             headers={
@@ -48,7 +45,6 @@ class ToolsClient:
                 "Content-Type": "application/json",
             },
             timeout=self.timeout,
-            verify=verify,
         )
 
     def close(self) -> None:
