@@ -29,6 +29,8 @@ def upgrade() -> None:
     op.create_table(
         "teams",
         sa.Column("team_id", PortableUUID, primary_key=True),
+        sa.Column("display_id", sa.Integer(), nullable=True),
+        sa.Column("team_code", sa.Text(), nullable=True),
         sa.Column("team_name", sa.Text(), nullable=False),
         sa.Column("members", PortableJSON, nullable=True),
         sa.Column("github_repo_url", sa.Text(), nullable=True),
@@ -39,6 +41,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_teams_bearer_token_hash", "teams", ["bearer_token_hash"])
+    op.create_index("ix_teams_team_code", "teams", ["team_code"])
 
     # 2. tasks table
     op.create_table(
@@ -76,6 +79,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger().with_variant(sa.Integer, "sqlite"), primary_key=True, autoincrement=True),
         sa.Column("team_id", PortableUUID, sa.ForeignKey("teams.team_id", ondelete="CASCADE"), nullable=False),
         sa.Column("task_id", sa.Text(), sa.ForeignKey("tasks.task_id", ondelete="CASCADE"), nullable=False),
+        sa.Column("assigned_task_id", sa.Text(), nullable=True),
         sa.Column(
             "submission_id",
             PortableUUID,
@@ -87,6 +91,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_task_assignments_team_id", "task_assignments", ["team_id"])
     op.create_index("ix_task_assignments_task_id", "task_assignments", ["task_id"])
+    op.create_index("ix_task_assignments_assigned_task_id", "task_assignments", ["assigned_task_id"])
     op.create_index("ix_task_assignments_submission_id", "task_assignments", ["submission_id"])
 
     # 5. tool_call_logs table

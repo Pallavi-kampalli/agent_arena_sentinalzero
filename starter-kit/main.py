@@ -204,6 +204,8 @@ def main(
                             "confidence": answer.get("confidence", 1.0),
                             "case_classification": answer.get("case_classification"),
                             "uncertainties": answer.get("uncertainties", []),
+                            "started_at": t_start_iso,
+                            "completed_at": t_end_iso,
                             "task_started_at": t_start_iso,
                             "task_completed_at": t_end_iso,
                         })

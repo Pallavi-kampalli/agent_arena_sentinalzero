@@ -71,7 +71,7 @@ class SubmissionFinalizeResponse(BaseModel):
 
 
 class BatchTaskSubmitItem(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     task_id: str = Field(..., min_length=1, max_length=100)
     case_classification: CaseClassification
@@ -82,6 +82,8 @@ class BatchTaskSubmitItem(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0, allow_inf_nan=False)
     started_at: str | None = None
     completed_at: str | None = None
+    task_started_at: str | None = None
+    task_completed_at: str | None = None
 
 
 class BatchSubmissionSubmitRequest(BaseModel):

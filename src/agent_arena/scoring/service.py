@@ -267,7 +267,10 @@ class ScoringService:
 
             # 6. Atomic Persistence in PostgreSQL
             sub.aggregate_score = round(submission_aggregate, 4)
-            sub.breakdown = breakdown
+            existing_bd = dict(sub.breakdown or {})
+            existing_bd.update(breakdown)
+            sub.breakdown = existing_bd
+            flag_modified(sub, "breakdown")
             sub.per_task_results = updated_per_task_records
             flag_modified(sub, "per_task_results")
             flag_modified(sub, "breakdown")

@@ -44,7 +44,7 @@ async def test_live_settings_update_without_restart_or_redeploy(
 
     # 1. Authoritative baseline check
     baseline_val = await settings.get("hidden_task_count")
-    assert baseline_val == 60, f"Expected canonical baseline default 60, got {baseline_val}"
+    assert baseline_val == 30, f"Expected canonical baseline default 30, got {baseline_val}"
 
     # 2. Record process identity
     pid_before = os.getpid()

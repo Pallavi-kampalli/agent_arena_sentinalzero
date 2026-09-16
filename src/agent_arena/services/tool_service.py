@@ -110,6 +110,33 @@ class ToolService:
         result = await self.session.execute(stmt)
         assignment = result.scalar_one_or_none()
 
+        if not assignment and sub and task_id:
+            breakdown_data = sub.breakdown or {}
+            task_plan = breakdown_data.get("task_plan", [])
+            matched = next(
+                (
+                    p
+                    for p in task_plan
+                    if p.get("assigned_task_id") == task_id or p.get("canonical_task_id") == task_id
+                ),
+                None,
+            )
+            if matched:
+                canonical_id = matched["canonical_task_id"]
+                task_def = await self.session.get(Task, canonical_id)
+                if task_def:
+                    now = datetime.now(UTC)
+                    assignment = TaskAssignment(
+                        team_id=team_id,
+                        task_id=canonical_id,
+                        assigned_task_id=task_id,
+                        submission_id=sub.submission_id,
+                        assigned_at=now,
+                        world_runtime_state=copy.deepcopy(task_def.world_state_seed),
+                    )
+                    self.session.add(assignment)
+                    await self.session.flush()
+
         if not assignment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

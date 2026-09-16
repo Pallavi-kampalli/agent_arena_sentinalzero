@@ -170,32 +170,19 @@ class SubmissionService:
             # 5. Monotonic attempt number & atomic creation
             attempt_number = existing_count + 1
             submission_id = uuid.uuid4()
-            submission = Submission(
-                submission_id=submission_id,
-                team_id=team_id,
-                attempt_number=attempt_number,
-                started_at=now,
-                status="in_progress",
-                per_task_results=[],
-            )
-            self.session.add(submission)
-
-            # 6. Generate ephemeral randomized task IDs and create isolated TaskAssignments
             short_sub = str(submission_id)[:8].upper()
+
             tasks_for_response = []
+            task_plan = []
             for idx, task_def in enumerate(selected_tasks, 1):
                 rand_hex = secrets.token_hex(2).upper()
                 assigned_task_id = f"TASK-{short_sub}-{idx:02d}-{rand_hex}"
 
-                assignment = TaskAssignment(
-                    team_id=team_id,
-                    task_id=task_def.task_id,
-                    assigned_task_id=assigned_task_id,
-                    submission_id=submission_id,
-                    assigned_at=now,
-                    world_runtime_state=copy.deepcopy(task_def.world_state_seed),
-                )
-                self.session.add(assignment)
+                task_plan.append({
+                    "canonical_task_id": task_def.task_id,
+                    "assigned_task_id": assigned_task_id,
+                    "order": idx,
+                })
 
                 tasks_for_response.append({
                     "task_id": assigned_task_id,
@@ -203,6 +190,16 @@ class SubmissionService:
                     "customer_message": task_def.input_payload.get("customer_message", ""),
                 })
 
+            submission = Submission(
+                submission_id=submission_id,
+                team_id=team_id,
+                attempt_number=attempt_number,
+                started_at=now,
+                status="in_progress",
+                per_task_results=[],
+                breakdown={"task_plan": task_plan},
+            )
+            self.session.add(submission)
             await self.session.commit()
 
             return {
@@ -255,53 +252,83 @@ class SubmissionService:
 
             await self._check_competition_window(submission)
 
-            # Check pre-generated assignments for this submission
-            assigns_stmt = (
+            now = datetime.now(UTC)
+            time_budget = await self.settings_service.get("time_budget_per_task_seconds", 180)
+
+            # 2. Level 3 Lock: Latest TaskAssignment row
+            latest_assign_stmt = (
                 sa.select(TaskAssignment)
                 .where(TaskAssignment.submission_id == submission.submission_id)
-                .order_by(TaskAssignment.id.asc())
+                .order_by(TaskAssignment.id.desc())
+                .limit(1)
+                .with_for_update()
             )
-            existing_assignments = list((await self.session.execute(assigns_stmt)).scalars().all())
+            latest_assign = (await self.session.execute(latest_assign_stmt)).scalar_one_or_none()
 
             per_task_results = list(submission.per_task_results or [])
-            submitted_ids = {
-                r.get("task_id") for r in per_task_results if isinstance(r, dict)
-            } | {
-                r.get("assigned_task_id") for r in per_task_results if isinstance(r, dict)
+            submitted_task_ids = {r["task_id"] for r in per_task_results if isinstance(r, dict) and "task_id" in r} | {
+                r.get("assigned_task_id") for r in per_task_results if isinstance(r, dict) and "assigned_task_id" in r
             }
 
-            if existing_assignments:
-                next_assign = None
-                for a in existing_assignments:
-                    if a.task_id not in submitted_ids and a.assigned_task_id not in submitted_ids:
-                        next_assign = a
-                        break
+            if latest_assign:
+                if (
+                    latest_assign.task_id not in submitted_task_ids
+                    and (not latest_assign.assigned_task_id or latest_assign.assigned_task_id not in submitted_task_ids)
+                ):
+                    assign_time = ensure_utc(latest_assign.assigned_at)
+                    elapsed = (now - assign_time).total_seconds()
+                    if elapsed <= time_budget:
+                        # Previous task is still running within its time budget
+                        disp_id = latest_assign.assigned_task_id or latest_assign.task_id
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail={
+                                "error": "TASK_IN_PROGRESS",
+                                "message": f"Task '{disp_id}' is currently in progress. Complete or await timeout before starting next task.",
+                                "task_id": disp_id,
+                            },
+                        )
+                    else:
+                        # Previous task timed out -> auto-mark timed_out in per_task_results
+                        per_task_results.append(
+                            {
+                                "task_id": latest_assign.task_id,
+                                "assigned_task_id": latest_assign.assigned_task_id or latest_assign.task_id,
+                                "status": "timed_out",
+                                "assigned_at": latest_assign.assigned_at.isoformat(),
+                                "timed_out_at": now.isoformat(),
+                            }
+                        )
+                        submission.per_task_results = per_task_results
+                        flag_modified(submission, "per_task_results")
 
-                if not next_assign:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail={
-                            "error": "ALL_TASKS_COMPLETED",
-                            "message": "All tasks for this submission have been completed. Finalize your submission.",
-                        },
-                    )
-
-                task_def = await self.session.get(Task, next_assign.task_id)
-                disp_id = next_assign.assigned_task_id or next_assign.task_id
-                return {
-                    "task_id": disp_id,
-                    "customer_message": task_def.input_payload.get("customer_message", "") if task_def else "",
-                    "customer_id": task_def.input_payload.get("customer_id", "") if task_def else "",
-                }
-
-            # Fallback legacy on-demand assignment creation
+            # 3. Check if all tasks have been assigned
             hidden_count = await self.settings_service.get("hidden_task_count", 30)
+            assigned_count_stmt = (
+                sa.select(sa.func.count())
+                .select_from(TaskAssignment)
+                .where(TaskAssignment.submission_id == submission.submission_id)
+            )
+            assigned_count = (await self.session.execute(assigned_count_stmt)).scalar() or 0
+            if assigned_count >= hidden_count:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "ALL_TASKS_COMPLETED",
+                        "message": f"All {hidden_count} tasks for this submission have been assigned. Finalize your submission.",
+                    },
+                )
+
+            # 4. Pick next unassigned task from hidden pool
             assigned_task_ids_subq = sa.select(TaskAssignment.task_id).where(
                 TaskAssignment.submission_id == submission.submission_id
             )
             next_task_stmt = (
                 sa.select(Task)
-                .where(Task.dataset == "hidden", Task.task_id.not_in(assigned_task_ids_subq))
+                .where(
+                    Task.dataset == "hidden",
+                    Task.task_id.not_in(assigned_task_ids_subq),
+                )
                 .order_by(Task.task_id.asc())
                 .limit(1)
             )
@@ -312,7 +339,6 @@ class SubmissionService:
                     detail={"error": "TASK_POOL_EXHAUSTED", "message": "No unassigned hidden tasks available."},
                 )
 
-            now = datetime.now(UTC)
             new_assignment = TaskAssignment(
                 team_id=team_id,
                 task_id=next_task.task_id,
@@ -407,7 +433,9 @@ class SubmissionService:
             per_task_results = list(submission.per_task_results or [])
             for r in per_task_results:
                 if isinstance(r, dict) and (
-                    r.get("task_id") == assignment.task_id or r.get("assigned_task_id") == payload.task_id
+                    r.get("task_id") == assignment.task_id
+                    or r.get("task_id") == payload.task_id
+                    or r.get("assigned_task_id") == payload.task_id
                 ):
                     if r.get("status") == "completed":
                         raise HTTPException(
@@ -417,11 +445,47 @@ class SubmissionService:
                                 "message": f"Task '{payload.task_id}' has already been submitted.",
                             },
                         )
+                    elif r.get("status") == "timed_out":
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail={
+                                "error": "TASK_TIMED_OUT",
+                                "message": f"Task '{payload.task_id}' has timed out.",
+                            },
+                        )
 
+            # Check dynamic time budget against server time
+            time_budget = await self.settings_service.get("time_budget_per_task_seconds", 180)
             now = datetime.now(UTC)
+            assign_time = ensure_utc(assignment.assigned_at)
+            elapsed = (now - assign_time).total_seconds()
+            if elapsed > time_budget:
+                per_task_results.append(
+                    {
+                        "task_id": payload.task_id,
+                        "canonical_task_id": assignment.task_id,
+                        "assigned_task_id": assignment.assigned_task_id or payload.task_id,
+                        "status": "timed_out",
+                        "assigned_at": assignment.assigned_at.isoformat(),
+                        "timed_out_at": now.isoformat(),
+                    }
+                )
+                submission.per_task_results = per_task_results
+                flag_modified(submission, "per_task_results")
+                await self.session.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "error": "TASK_TIMED_OUT",
+                        "message": f"Task '{payload.task_id}' has timed out ({int(elapsed)}s elapsed, budget is {time_budget}s).",
+                    },
+                )
+
+            # Record completed
             per_task_results.append(
                 {
-                    "task_id": assignment.task_id,
+                    "task_id": payload.task_id,
+                    "canonical_task_id": assignment.task_id,
                     "assigned_task_id": assignment.assigned_task_id or payload.task_id,
                     "status": "completed",
                     "assigned_at": assignment.assigned_at.isoformat(),
@@ -501,8 +565,35 @@ class SubmissionService:
             per_task_results = []
             prev_completed_at = None
 
+            breakdown_data = submission.breakdown or {}
+            task_plan = breakdown_data.get("task_plan", [])
+
             for ans in answers:
                 assign = assign_by_assigned_id.get(ans.task_id) or assign_by_canonical_id.get(ans.task_id)
+                if not assign:
+                    matched = next(
+                        (
+                            p
+                            for p in task_plan
+                            if p.get("assigned_task_id") == ans.task_id or p.get("canonical_task_id") == ans.task_id
+                        ),
+                        None,
+                    )
+                    canonical_id = matched["canonical_task_id"] if matched else ans.task_id
+                    task_def = await self.session.get(Task, canonical_id)
+                    assign = TaskAssignment(
+                        team_id=team_id,
+                        task_id=canonical_id,
+                        assigned_task_id=ans.task_id,
+                        submission_id=submission_id,
+                        assigned_at=sub_start_dt,
+                        world_runtime_state=copy.deepcopy(task_def.world_state_seed) if task_def else {},
+                    )
+                    self.session.add(assign)
+                    await self.session.flush()
+                    assign_by_assigned_id[ans.task_id] = assign
+                    assign_by_canonical_id[canonical_id] = assign
+
                 if not assign:
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
@@ -514,19 +605,21 @@ class SubmissionService:
 
                 task_duration = 0.0
                 gap = 0.0
-                if ans.started_at and ans.completed_at:
+                s_str = ans.started_at or ans.task_started_at
+                c_str = ans.completed_at or ans.task_completed_at
+                if s_str and c_str:
                     try:
-                        s_dt = datetime.fromisoformat(ans.started_at.replace("Z", "+00:00"))
-                        c_dt = datetime.fromisoformat(ans.completed_at.replace("Z", "+00:00"))
+                        s_dt = datetime.fromisoformat(s_str.replace("Z", "+00:00"))
+                        c_dt = datetime.fromisoformat(c_str.replace("Z", "+00:00"))
                         task_duration = max(0.0, (c_dt - s_dt).total_seconds())
                         if prev_completed_at:
                             gap = max(0.0, (s_dt - prev_completed_at).total_seconds())
                         prev_completed_at = c_dt
                     except Exception:
                         task_duration = 0.0
-                elif ans.completed_at and prev_completed_at:
+                elif c_str and prev_completed_at:
                     try:
-                        c_dt = datetime.fromisoformat(ans.completed_at.replace("Z", "+00:00"))
+                        c_dt = datetime.fromisoformat(c_str.replace("Z", "+00:00"))
                         task_duration = max(0.0, (c_dt - prev_completed_at).total_seconds())
                         prev_completed_at = c_dt
                     except Exception:
@@ -539,8 +632,8 @@ class SubmissionService:
                         "status": "completed",
                         "duration_seconds": round(task_duration, 2),
                         "gap_before_seconds": round(gap, 2),
-                        "started_at": ans.started_at,
-                        "completed_at": ans.completed_at,
+                        "started_at": s_str,
+                        "completed_at": c_str,
                         "submitted_at": now.isoformat(),
                         "submission_payload": ans.model_dump(),
                     }
@@ -561,15 +654,15 @@ class SubmissionService:
                 else 0.0
             )
 
-            submission.breakdown = {
-                "submission_metrics": {
-                    "total_duration_seconds": round(total_duration, 2),
-                    "tool_calls_total": tool_calls_total,
-                    "tool_calls_breakdown": tool_counts,
-                    "tool_calls_rejections": rejections_count,
-                    "avg_tool_latency_ms": avg_latency,
-                }
+            updated_breakdown = dict(submission.breakdown or {})
+            updated_breakdown["submission_metrics"] = {
+                "total_duration_seconds": round(total_duration, 2),
+                "tool_calls_total": tool_calls_total,
+                "tool_calls_breakdown": tool_counts,
+                "tool_calls_rejections": rejections_count,
+                "avg_tool_latency_ms": avg_latency,
             }
+            submission.breakdown = updated_breakdown
             flag_modified(submission, "breakdown")
 
             submission.status = "completed"
@@ -636,9 +729,30 @@ class SubmissionService:
         if sub.status in ("completed", "expired", "interrupted"):
             time_remaining = 0
         else:
-            sub_start = ensure_utc(sub.started_at)
-            elapsed = (now - sub_start).total_seconds()
-            time_remaining = max(0, int(1800 - elapsed))
+            assign_stmt = (
+                sa.select(TaskAssignment)
+                .where(TaskAssignment.submission_id == submission_id)
+                .order_by(TaskAssignment.id.desc())
+                .limit(1)
+            )
+            latest_assign = (await self.session.execute(assign_stmt)).scalar_one_or_none()
+            if latest_assign:
+                finished_ids = {r["task_id"] for r in results if isinstance(r, dict) and "task_id" in r} | {
+                    r.get("assigned_task_id") for r in results if isinstance(r, dict) and "assigned_task_id" in r
+                }
+                if (
+                    latest_assign.task_id not in finished_ids
+                    and (not latest_assign.assigned_task_id or latest_assign.assigned_task_id not in finished_ids)
+                ):
+                    assign_time = ensure_utc(latest_assign.assigned_at)
+                    elapsed = (now - assign_time).total_seconds()
+                    time_remaining = max(0, int(time_budget - elapsed))
+                else:
+                    time_remaining = time_budget
+            else:
+                sub_start = ensure_utc(sub.started_at)
+                elapsed = (now - sub_start).total_seconds()
+                time_remaining = max(0, int(1800 - elapsed))
 
         return {
             "status": sub.status,
@@ -680,6 +794,36 @@ class SubmissionService:
                 )
 
             now = datetime.now(UTC)
+            results = list(sub.per_task_results or [])
+            finished_ids = {r["task_id"] for r in results if isinstance(r, dict) and "task_id" in r} | {
+                r.get("assigned_task_id") for r in results if isinstance(r, dict) and "assigned_task_id" in r
+            }
+
+            assign_stmt = (
+                sa.select(TaskAssignment)
+                .where(TaskAssignment.submission_id == submission_id)
+                .order_by(TaskAssignment.id.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            latest_assign = (await self.session.execute(assign_stmt)).scalar_one_or_none()
+            if (
+                latest_assign
+                and latest_assign.task_id not in finished_ids
+                and (not latest_assign.assigned_task_id or latest_assign.assigned_task_id not in finished_ids)
+            ):
+                results.append(
+                    {
+                        "task_id": latest_assign.task_id,
+                        "assigned_task_id": latest_assign.assigned_task_id or latest_assign.task_id,
+                        "status": "timed_out",
+                        "assigned_at": latest_assign.assigned_at.isoformat(),
+                        "timed_out_at": now.isoformat(),
+                    }
+                )
+                sub.per_task_results = results
+                flag_modified(sub, "per_task_results")
+
             sub.status = "completed"
             sub.completed_at = now
             await self.session.commit()
