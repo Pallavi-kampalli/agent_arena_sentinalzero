@@ -73,6 +73,17 @@ async def seed_admin(target_url: str | None = None) -> bool:
                 print("[PASS] Recorded initial 'admin_bootstrap' audit log entry.")
             else:
                 print(f"[PASS] Administrative bootstrap record already exists (audit_log_id={existing}).")
+
+            # Verify and seed canonical benchmark tasks if empty
+            task_res = await session.execute(text("SELECT count(*) FROM tasks WHERE dataset = 'hidden'"))
+            task_count = task_res.scalar() or 0
+            if task_count == 0:
+                from agent_arena.services.dataset_service import DatasetService
+                ds = DatasetService(session)
+                await ds.generate_and_load_dataset(dataset_type="hidden")
+                print("[PASS] Seeded canonical hidden benchmark tasks into database.")
+            else:
+                print(f"[PASS] Canonical benchmark tasks already present ({task_count} tasks).")
         await engine.dispose()
     except Exception as e:
         # Fallback to docker compose exec for isolated containerized PostgreSQL

@@ -1,4 +1,4 @@
-"""Agent Arena SupportOps - Phase 8 Disaster Recovery & Operational Recovery Verification.
+"""Agent Arena SupportOps - Disaster Recovery & Operational Recovery Verification.
 
 Validates disaster recovery, process lifecycle resilience, and data persistence:
 1. Scenario 1: Stateless API restart resilience (zero state lost)
@@ -18,12 +18,14 @@ import httpx
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR / "scripts"))
+sys.path.insert(0, str(ROOT_DIR / "src"))
 
 from backup_db import backup_database  # noqa: E402
 from restore_db import restore_database  # noqa: E402
+from agent_arena.config import get_config  # noqa: E402
 
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
-ADMIN_SECRET = os.getenv("ADMIN_PANEL_SECRET", "dev-admin-secret-key-32-chars-min-for-agent-arena")
+ADMIN_SECRET = os.getenv("ADMIN_PANEL_SECRET", get_config().ADMIN_PANEL_SECRET)
 ADMIN_HEADERS = {"X-Admin-Secret": ADMIN_SECRET}
 
 
@@ -170,7 +172,7 @@ def main() -> None:
     print("  => PASS: Named volume postgres_data preserved 100% of data across complete container destruction.")
 
     print("\n" + "=" * 80)
-    print(" ALL PHASE 8 DISASTER RECOVERY & PERSISTENCE VERIFICATIONS PASSED")
+    print(" ALL DISASTER RECOVERY & PERSISTENCE VERIFICATIONS PASSED")
     print("=" * 80)
 
 

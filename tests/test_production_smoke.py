@@ -5,10 +5,10 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from agent_arena.config import AppConfig
+from agent_arena.config import AppConfig, get_config
 
 TARGET_URL = os.environ.get("PRODUCTION_URL", "http://localhost:8000").rstrip("/")
-ADMIN_SECRET = os.environ.get("ADMIN_PANEL_SECRET", "dev-admin-secret-key-32-chars-min-for-agent-arena")
+ADMIN_SECRET = os.environ.get("ADMIN_PANEL_SECRET", get_config().ADMIN_PANEL_SECRET)
 
 
 @pytest.fixture(scope="module")
@@ -216,6 +216,11 @@ def test_smoke_live_settings_update_and_revert(client):
     """Verifies that live settings can be modified and restored via admin API without process restart."""
     headers = {"X-Admin-Secret": ADMIN_SECRET}
 
+    # 0. Capture original setting
+    r_orig = client.get("/admin/settings", headers=headers)
+    assert r_orig.status_code == 200
+    orig_val = next(s["value"] for s in r_orig.json()["settings"] if s["key"] == "hidden_task_count")
+
     # 1. Update setting
     r_put = client.put("/admin/settings/hidden_task_count", json={"value": 150}, headers=headers)
     assert r_put.status_code == 200
@@ -227,10 +232,10 @@ def test_smoke_live_settings_update_and_revert(client):
     settings_dict = {s["key"]: s["value"] for s in r_get.json()["settings"]}
     assert settings_dict["hidden_task_count"] == 150
 
-    # 3. Restore to canonical default
-    r_revert = client.put("/admin/settings/hidden_task_count", json={"value": 200}, headers=headers)
+    # 3. Restore to original setting
+    r_revert = client.put("/admin/settings/hidden_task_count", json={"value": orig_val}, headers=headers)
     assert r_revert.status_code == 200
-    assert r_revert.json()["new_value"] == 200
+    assert r_revert.json()["new_value"] == orig_val
 
 
 def test_smoke_leaderboard_standings(client):

@@ -31,6 +31,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to seed default settings on startup: {e}")
 
+        try:
+            import sqlalchemy as sa
+            from agent_arena.models.task import Task
+            from agent_arena.services.dataset_service import DatasetService
+
+            task_count_stmt = sa.select(sa.func.count()).select_from(Task).where(Task.dataset == "hidden")
+            existing_tasks = (await session.execute(task_count_stmt)).scalar() or 0
+            if existing_tasks == 0:
+                dataset_service = DatasetService(session)
+                await dataset_service.generate_and_load_dataset(dataset_type="hidden")
+                logger.info("Seeded canonical hidden tasks into database on startup")
+        except Exception as e:
+            logger.error(f"Failed to seed hidden tasks dataset on startup: {e}")
+
     yield
     logger.info("Shutting down Agent Arena API")
 

@@ -26,6 +26,7 @@ async def sample_team(db_session: AsyncSession):
         token_version=1,
         status="active",
     )
+    team._raw_token = token
     db_session.add(team)
     await db_session.commit()
     return team
@@ -33,8 +34,7 @@ async def sample_team(db_session: AsyncSession):
 
 @pytest.fixture
 def sample_auth_headers(sample_team: Team) -> dict[str, str]:
-    token = create_bearer_token(sample_team.team_id, token_version=sample_team.token_version)
-    return {"Authorization": f"Bearer {token}"}
+    return {"Authorization": f"Bearer {sample_team._raw_token}"}
 
 
 @pytest.fixture

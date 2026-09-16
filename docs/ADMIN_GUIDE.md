@@ -4,7 +4,7 @@
 
 The **Admin Control Plane** (`/admin/*`) provides competition organizers and platform operators with centralized, real-time control over the Agent Arena — SupportOps platform.
 
-The admin control plane is strictly layered on top of the sealed Phase 0–4 core:
+The admin control plane is strictly layered on top of the core platform services (domain models, solver engine, database models, and scoring system):
 - **Zero Core Tampering:** Participant contracts (`/task/*`, `/submission/*`, `/tools/*`) and canonical scoring mathematics remain completely untouched.
 - **Unified Service Architecture:** HTTP routes delegate to `AdminService`, which orchestrates canonical `AuthService`, `SettingsService`, and `ScoringService`.
 - **Atomic Operations:** Team mutations utilize shared in-process `asyncio.Lock` wrappers and database transactions to eliminate race conditions.

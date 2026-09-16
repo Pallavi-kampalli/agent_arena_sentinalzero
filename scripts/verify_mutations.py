@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
 
 
 print("=" * 65)
-print("  Agent Arena — Phase 7 Adversarial Mutation Verification")
+print("  Agent Arena — Adversarial Mutation Verification")
 print("=" * 65)
 
 passed_mutations = 0
@@ -219,7 +219,7 @@ print(f"  MUTATION TESTING SCORE: {passed_mutations}/{total_mutations} KILLED")
 print("=" * 65)
 
 if passed_mutations == total_mutations:
-    print(f"ALL {total_mutations} PHASE 7 ADVERSARIAL MUTATIONS KILLED SUCCESSFULLY!")
+    print(f"ALL {total_mutations} ADVERSARIAL MUTATIONS KILLED SUCCESSFULLY!")
     sys.exit(0)
 else:
     print(f"ONLY {passed_mutations}/{total_mutations} MUTATIONS KILLED.")

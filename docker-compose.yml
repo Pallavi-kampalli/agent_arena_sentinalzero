@@ -6,9 +6,11 @@ services:
     environment:
       POSTGRES_DB: agent_arena
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d agent_arena"]
       interval: 3s
@@ -25,8 +27,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgrespassword@postgres:5432/agent_arena
-      ENVIRONMENT: staging
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/agent_arena
+      ENVIRONMENT: ${ENVIRONMENT:-staging}
     command: ["alembic", "upgrade", "head"]
     networks:
       - agent_arena_net
@@ -43,9 +45,9 @@ services:
     ports:
       - "${PORT:-8000}:8000"
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgrespassword@postgres:5432/agent_arena
-      ADMIN_PANEL_SECRET: ${ADMIN_PANEL_SECRET:-dev-admin-secret-key-32-chars-min-for-agent-arena}
-      JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET:-dev-jwt-secret-key-32-chars-min-for-agent-arena}
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/agent_arena
+      ADMIN_PANEL_SECRET: ${ADMIN_PANEL_SECRET}
+      JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET}
       ENVIRONMENT: ${ENVIRONMENT:-staging}
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}

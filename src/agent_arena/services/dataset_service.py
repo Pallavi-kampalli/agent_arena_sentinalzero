@@ -161,11 +161,16 @@ class DatasetService:
 
         try:
             for t in tasks_to_load:
+                gt = t.get("ground_truth", {})
+                classification = gt.get("classification", {}) if isinstance(gt, dict) else {}
+                family = t.get("family") or classification.get("category") or "general"
+                variant = t.get("variant") or classification.get("issue") or "standard"
+
                 task_model = Task(
                     task_id=t["task_id"],
                     dataset=t.get("dataset", dataset_type),
-                    family=None,
-                    variant=None,
+                    family=family,
+                    variant=variant,
                     input_payload=t["input_payload"],
                     world_state_seed=t["world_state_seed"],
                     ground_truth=t["ground_truth"],

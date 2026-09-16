@@ -11,7 +11,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 STARTER_KIT_SRC = ROOT_DIR / "starter-kit"
 
 print("=" * 70)
-print(" Agent Arena — Phase 6 Clean-Room Packaging & Import-Graph Verification")
+print(" Agent Arena — Starter Kit Clean-Room Packaging & Import-Graph Verification")
 print("=" * 70)
 
 

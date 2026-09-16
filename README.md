@@ -178,14 +178,14 @@ mypy src
 ### Adversarial Mutation Suite
 Verify that all 6 adversarial mutations (isolation bypass, live settings ignore, historical score corruption, concurrency race condition, oracle leakage, token revocation bypass) are killed:
 ```bash
-python scripts/verify_phase7_mutations.py
+python scripts/verify_mutations.py
 ```
 
 ### Starter Kit Integrity & Clean-Room Packaging
 Verify starter kit export freshness and packaging independence:
 ```bash
 python scripts/export_starter_kit.py --check
-python scripts/verify_phase6_starter_kit.py
+python scripts/verify_starter_kit.py
 ```
 
 ---
@@ -206,7 +206,7 @@ This verifies:
 ### Disaster Recovery Verification
 Verify platform resilience across all 4 disaster scenarios:
 ```bash
-python scripts/verify_phase8_recovery.py
+python scripts/verify_recovery.py
 ```
 1. **Stateless API Restart**: In-flight state preserved; rapid restart.
 2. **Database Outage & Recovery**: Healthcheck decoupling (`/health` 200 vs `/health/ready` 503); seamless reconnection.
@@ -217,19 +217,19 @@ For detailed operational procedures, emergency playbooks, and backup schedules, 
 
 ---
 
-## 8. Operational Scope & Boundary
+## 8. Architecture & Subsystems
 
-The platform has reached its final target state:
+The platform consists of the following core production subsystems:
 ```text
-PHASE 0 — SEALED (Domain Models & Rules)
-PHASE 1 — SEALED (Task Generator & Reference Solver)
-PHASE 2 — SEALED (FastAPI Tool Execution & PostgreSQL Engine)
-PHASE 3 — SEALED (Submission Lifecycle & Concurrency Control)
-PHASE 4 — SEALED (Multi-Dimensional Scoring Engine)
-PHASE 5 — SEALED (Admin Control Plane & Settings)
-PHASE 6 — SEALED (Clean-Room Starter Kit & SDK)
-PHASE 7 — SEALED (Adversarial Hardening & Load Benchmarks)
-PHASE 8 — LOCAL PRODUCTION READY (Deployment, Rehearsal, DR)
+• Domain Layer          : Authoritative business rules, immutable eligibility checks, and domain schemas
+• Dataset Engine        : Deterministic world generation, task synthesis, and reference solver
+• API & Storage Engine  : FastAPI async tool execution layer backed by PostgreSQL 16
+• Lifecycle & Locks     : Mutex-protected submission lifecycle and assignment concurrency controls
+• Multi-Dim Evaluator   : Mathematical scoring engine (Task Success, Policy, Grounding, Latency)
+• Admin Control Plane   : Multi-team administration, live leaderboard, and settings control plane
+• Clean-Room Packaging  : Isolated participant starter kit, mock simulator, and typed Python SDK
+• Adversarial Defense   : Zero-oracle leakage guards, token revocation, and state isolation
+• Operations & Recovery : Docker Compose deployment, disaster recovery verification, and automated backups
 ```
 
 *Note: Remote/cloud deployment (e.g. public DNS, TLS reverse proxies, Kubernetes) is intentionally deferred. The local production-grade architecture serves as the authoritative, reproducible baseline.*
