@@ -11,6 +11,7 @@ Orchestrates the lifecycle around the participant's agent:
 """
 
 import argparse
+from datetime import datetime, timezone
 import os
 import sys
 import time
@@ -85,8 +86,12 @@ def main(
     max_tasks: int | None = None,
     poll_interval: float | None = None,
 ) -> None:
-    base_url = os.getenv("BASE_URL", "http://localhost:8000")
-    token = os.getenv("BEARER_TOKEN", "dev-practice-token")
+    if mode == "practice":
+        base_url = os.getenv("PRACTICE_ARENA_URL", os.getenv("BASE_URL", "http://127.0.0.1:8001"))
+        token = os.getenv("PRACTICE_BEARER_TOKEN", os.getenv("BEARER_TOKEN", "dev-practice-token"))
+    else:
+        base_url = os.getenv("SUBMISSION_ARENA_URL", os.getenv("BASE_URL", "http://localhost:8000"))
+        token = os.getenv("SUBMISSION_BEARER_TOKEN", os.getenv("BEARER_TOKEN", ""))
     is_mock = ":8001" in base_url or "localhost:8001" in base_url or "127.0.0.1:8001" in base_url
 
     # Default poll intervals: 0.0 for submission (sequential throughput), 1.0 for practice
@@ -107,11 +112,13 @@ def main(
     try:
         with ArenaClient(base_url=base_url, token=token) as client:
             sub_id = None
+            tasks_list: list[dict[str, Any]] = []
             # 1. Initialize or connect to active submission
             try:
                 sub = client.start_submission()
                 sub_id = sub.get("submission_id")
-                total_expected = sub.get("tasks_total")
+                tasks_list = sub.get("tasks") or []
+                total_expected = sub.get("tasks_total") or len(tasks_list)
                 print(f"[+] Started new submission: {sub_id} (Expected tasks: {total_expected or 'N/A'})")
             except ApiError as e:
                 if "ACTIVE_SUBMISSION_EXISTS" in str(e):
@@ -127,106 +134,223 @@ def main(
             completed_in_memory: list[dict[str, Any]] = []
             total_start_time = time.time()
 
-            # 2. Main task acquisition and sequential dispatch loop
-            while True:
-                if max_tasks and tasks_completed >= max_tasks:
-                    print(f"\n[*] Reached maximum tasks limit ({max_tasks}). Exiting.")
-                    break
+            if mode == "submission" and tasks_list:
+                # -----------------------------------------------------------------
+                # BATCH SUBMISSION MODE: All tasks delivered upfront, solved
+                # sequentially locally, and submitted in a single atomic batch.
+                # -----------------------------------------------------------------
+                if max_tasks and len(tasks_list) > max_tasks:
+                    tasks_list = tasks_list[:max_tasks]
 
-                print(f"\n--- Requesting Task #{tasks_completed + 1} ---")
+                batch_answers: list[dict[str, Any]] = []
+                print(f"[+] Received all {len(tasks_list)} tasks upfront for this submission.")
+                print(f"[+] Executing tasks sequentially and collecting answers in memory...")
+
                 try:
-                    task = client.get_task()
-                except ApiError as e:
-                    err_str = str(e)
-                    if "NO_MORE_TASKS" in err_str or "SUBMISSION_COMPLETED" in err_str or "NO_TASKS" in err_str:
-                        print("[+] All available tasks completed for this epoch!")
-                        break
-                    print(f"[-] Could not acquire task: {e.detail}")
-                    break
+                    for idx, task in enumerate(tasks_list, 1):
+                        task_id = task.get("task_id", "UNKNOWN")
+                        client.set_active_task(task_id)
 
-                task_id = task.get("task_id", "UNKNOWN")
-                print(f"Assigned Task : {task_id}")
-                print(f"Customer ID   : {task.get('customer_id')}")
-                print(f"Customer Msg  : {task.get('customer_message')}")
-                print("-" * 65)
+                        print(f"\n--- Processing Task #{idx}/{len(tasks_list)}: {task_id} ---")
+                        print(f"Customer ID   : {task.get('customer_id')}")
+                        print(f"Customer Msg  : {task.get('customer_message')}")
+                        print("-" * 65)
 
-                # 3. Invoke participant agent solve(task, tools) sequentially
-                t0 = time.time()
-                try:
-                    answer = agent.solve(task, client.tools)
-                except NotImplementedError:
-                    print("\n" + "!" * 65)
-                    print("  [!] agent.solve() raised NotImplementedError.")
-                    print("  To solve tasks, implement your agent logic inside:")
-                    print("      agent.py -> def solve(task, tools)")
-                    print("!" * 65)
-                    print("=" * 65)
-                    print("Run completed successfully.")
-                    return
+                        t_start_iso = datetime.now(timezone.utc).isoformat()
+                        t0 = time.time()
+                        try:
+                            answer = agent.solve(task, client.tools)
+                        except NotImplementedError:
+                            print("\n" + "!" * 65)
+                            print("  [!] agent.solve() raised NotImplementedError.")
+                            print("  To solve tasks, implement your agent logic inside:")
+                            print("      agent.py -> def solve(task, tools)")
+                            print("!" * 65)
+                            print("=" * 65)
+                            print("Run completed successfully.")
+                            if sub_id:
+                                try:
+                                    client.abort_submission(sub_id)
+                                except Exception:
+                                    pass
+                            return
+                        except Exception as e:
+                            print(f"\n[-] Unhandled exception in agent.solve() on {task_id}: {e}")
+                            raise
+
+                        t_end_iso = datetime.now(timezone.utc).isoformat()
+                        duration = time.time() - t0
+
+                        # Validate Section 7 contract compliance
+                        validation_errors = validate_output_contract(answer)
+                        if validation_errors:
+                            print(f"[!] Output validation warnings for {task_id}:")
+                            for err in validation_errors:
+                                print(f"    - {err}")
+
+                        res_choice = answer.get("decision", {}).get("resolution")
+                        esc_choice = answer.get("decision", {}).get("escalation_required")
+                        print(f"Resolution    : {res_choice} (Escalate: {esc_choice})")
+                        print(f"Evidence      : {answer.get('evidence')}")
+                        print(f"Solve Time    : {duration:.2f}s")
+
+                        tasks_completed += 1
+                        batch_answers.append({
+                            "task_id": task_id,
+                            "decision": answer.get("decision", {}),
+                            "evidence": answer.get("evidence", []),
+                            "notes": answer.get("notes", ""),
+                            "customer_response": answer.get("customer_response", ""),
+                            "confidence": answer.get("confidence", 1.0),
+                            "case_classification": answer.get("case_classification"),
+                            "uncertainties": answer.get("uncertainties", []),
+                            "task_started_at": t_start_iso,
+                            "task_completed_at": t_end_iso,
+                        })
+
+                        completed_in_memory.append({
+                            "task_id": task_id,
+                            "resolution": res_choice,
+                            "escalation_required": esc_choice,
+                            "duration": duration,
+                            "correct": None,
+                        })
+
+                        if poll_interval > 0 and idx < len(tasks_list):
+                            time.sleep(poll_interval)
+
+                    # All tasks solved! Submit in a single atomic batch
+                    print("\n" + "=" * 65)
+                    print(f"Submitting all {len(batch_answers)} task solutions in a single batch to Arena API...")
+                    batch_res = client.submit_batch(sub_id, batch_answers)
+                    print(f"[+] Batch submission completed successfully! (Status: {batch_res.get('status', 'completed')})")
+
                 except Exception as e:
-                    print(f"\n[-] Unhandled exception in agent.solve() on {task_id}: {e}")
+                    print(f"\n[-] Critical error encountered during submission run: {e}")
+                    if sub_id:
+                        print(f"[*] Aborting submission '{sub_id}' so it is not scored or counted against attempt limit...")
+                        try:
+                            client.abort_submission(sub_id)
+                            print("[+] Submission successfully aborted as interrupted.")
+                        except Exception as abort_err:
+                            print(f"[-] Could not abort cleanly: {abort_err}")
                     raise
 
-                duration = time.time() - t0
+            else:
+                # -----------------------------------------------------------------
+                # PRACTICE MODE / FALLBACK TASK-BY-TASK LOOP
+                # -----------------------------------------------------------------
+                task_iter_list = list(tasks_list) if tasks_list else None
 
-                # 4. Validate Section 7 contract compliance
-                validation_errors = validate_output_contract(answer)
-                if validation_errors:
-                    print(f"[!] Output validation warnings for {task_id}:")
-                    for err in validation_errors:
-                        print(f"    - {err}")
+                while True:
+                    if max_tasks and tasks_completed >= max_tasks:
+                        print(f"\n[*] Reached maximum tasks limit ({max_tasks}). Exiting.")
+                        break
 
-                # 5. Submit answer to API
-                res_choice = answer.get("decision", {}).get("resolution")
-                esc_choice = answer.get("decision", {}).get("escalation_required")
-                print(f"Resolution    : {res_choice} (Escalate: {esc_choice})")
-                print(f"Evidence      : {answer.get('evidence')}")
-                print(f"Solve Time    : {duration:.2f}s")
-                print("Submitting resolution to API...")
-
-                result = client.submit_task(task_id=task_id, payload=answer)
-                tasks_completed += 1
-
-                # 6. Evaluation feedback (Practice / Mock Simulator vs Hidden Live Arena)
-                is_correct = None
-                if "correct" in result:
-                    is_correct = bool(result.get("correct", False))
-                    if is_correct:
-                        passed_count += 1
-                        print("Mock Evaluation : [PASS] Ground truth matched perfectly!")
+                    if task_iter_list is not None:
+                        if not task_iter_list:
+                            print("[+] All available tasks completed for this epoch!")
+                            break
+                        task = task_iter_list.pop(0)
                     else:
-                        failed_count += 1
-                        print("Mock Evaluation : [FAIL]")
-                        print(f"   Expected Res: {result.get('expected_resolution')}")
-                        print(f"   Expected Ev:  {result.get('expected_evidence')}")
-                        print(f"   Diff:         {result.get('diff_explanation')}")
-                        if is_mock:
-                            print(f"   Debug URL:    {base_url.rstrip('/')}/dashboard")
-                else:
-                    print("[+] Submission received and recorded by Arena platform.")
+                        print(f"\n--- Requesting Task #{tasks_completed + 1} ---")
+                        try:
+                            task = client.get_task()
+                        except ApiError as e:
+                            err_str = str(e)
+                            if "NO_MORE_TASKS" in err_str or "SUBMISSION_COMPLETED" in err_str or "NO_TASKS" in err_str:
+                                print("[+] All available tasks completed for this epoch!")
+                                break
+                            print(f"[-] Could not acquire task: {e.detail}")
+                            break
 
-                completed_in_memory.append({
-                    "task_id": task_id,
-                    "resolution": res_choice,
-                    "escalation_required": esc_choice,
-                    "duration": duration,
-                    "correct": is_correct,
-                })
+                    task_id = task.get("task_id", "UNKNOWN")
+                    client.set_active_task(task_id)
 
-                if mode == "practice" and once:
-                    print("\n[+] Single task completed (--once flag). Exiting.")
-                    break
+                    print(f"\n--- Processing Task #{tasks_completed + 1} ---")
+                    print(f"Assigned Task : {task_id}")
+                    print(f"Customer ID   : {task.get('customer_id')}")
+                    print(f"Customer Msg  : {task.get('customer_message')}")
+                    print("-" * 65)
 
-                if poll_interval > 0:
-                    time.sleep(poll_interval)
+                    # Invoke participant agent solve(task, tools)
+                    t0 = time.time()
+                    try:
+                        answer = agent.solve(task, client.tools)
+                    except NotImplementedError:
+                        print("\n" + "!" * 65)
+                        print("  [!] agent.solve() raised NotImplementedError.")
+                        print("  To solve tasks, implement your agent logic inside:")
+                        print("      agent.py -> def solve(task, tools)")
+                        print("!" * 65)
+                        print("=" * 65)
+                        print("Run completed successfully.")
+                        return
+                    except Exception as e:
+                        print(f"\n[-] Unhandled exception in agent.solve() on {task_id}: {e}")
+                        raise
 
-            # 7. Finalize submission if in submission mode
-            if sub_id and mode == "submission":
-                try:
-                    client.finalize_submission(sub_id)
-                    print(f"\n[+] Finalized submission '{sub_id}'.")
-                except ApiError as e:
-                    print(f"\n[*] Finalize notice: {e.detail}")
+                    duration = time.time() - t0
+
+                    # Validate Section 7 contract compliance
+                    validation_errors = validate_output_contract(answer)
+                    if validation_errors:
+                        print(f"[!] Output validation warnings for {task_id}:")
+                        for err in validation_errors:
+                            print(f"    - {err}")
+
+                    # Submit answer to API
+                    res_choice = answer.get("decision", {}).get("resolution")
+                    esc_choice = answer.get("decision", {}).get("escalation_required")
+                    print(f"Resolution    : {res_choice} (Escalate: {esc_choice})")
+                    print(f"Evidence      : {answer.get('evidence')}")
+                    print(f"Solve Time    : {duration:.2f}s")
+                    print("Submitting resolution to API...")
+
+                    result = client.submit_task(task_id=task_id, payload=answer)
+                    tasks_completed += 1
+
+                    # Evaluation feedback
+                    is_correct = None
+                    if "correct" in result:
+                        is_correct = bool(result.get("correct", False))
+                        if is_correct:
+                            passed_count += 1
+                            print("Mock Evaluation : [PASS] Ground truth matched perfectly!")
+                        else:
+                            failed_count += 1
+                            print("Mock Evaluation : [FAIL]")
+                            print(f"   Expected Res: {result.get('expected_resolution')}")
+                            print(f"   Expected Ev:  {result.get('expected_evidence')}")
+                            print(f"   Diff:         {result.get('diff_explanation')}")
+                            if is_mock:
+                                print(f"   Debug URL:    {base_url.rstrip('/')}/dashboard")
+                    else:
+                        print("[+] Submission received and recorded by Arena platform.")
+
+                    completed_in_memory.append({
+                        "task_id": task_id,
+                        "resolution": res_choice,
+                        "escalation_required": esc_choice,
+                        "duration": duration,
+                        "correct": is_correct,
+                    })
+
+                    if mode == "practice" and once:
+                        print("\n[+] Single task completed (--once flag). Exiting.")
+                        break
+
+                    if poll_interval > 0:
+                        time.sleep(poll_interval)
+
+                # Finalize submission if in submission mode (for step-by-step fallback)
+                if sub_id and mode == "submission":
+                    try:
+                        client.finalize_submission(sub_id)
+                        print(f"\n[+] Finalized submission '{sub_id}'.")
+                    except ApiError as e:
+                        print(f"\n[*] Finalize notice: {e.detail}")
+
 
             total_elapsed = time.time() - total_start_time
             avg_time = (total_elapsed / tasks_completed) if tasks_completed > 0 else 0.0

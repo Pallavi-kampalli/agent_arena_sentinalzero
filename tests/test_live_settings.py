@@ -90,12 +90,12 @@ async def test_live_settings_update_without_restart_or_redeploy(
     # 6. Restore canonical baseline via HTTP PUT endpoint
     restore_res = await client.put(
         "/admin/settings/hidden_task_count",
-        json={"value": 60},
+        json={"value": 30},
         headers=admin_headers,
     )
     assert restore_res.status_code == 200
-    assert restore_res.json()["new_value"] == 60
-    assert await settings.get("hidden_task_count") == 60
+    assert restore_res.json()["new_value"] == 30
+    assert await settings.get("hidden_task_count") == 30
 
 
 @pytest.mark.asyncio

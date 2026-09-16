@@ -38,6 +38,8 @@ class AdminTeamBulkImportRequest(BaseModel):
 class AdminTeamSummary(BaseModel):
     team_id: str
     team_name: str
+    display_id: int | None = None
+    team_code: str | None = None
     status: str
     token_version: int
     github_repo_url: str | None = None
@@ -52,6 +54,8 @@ class AdminTeamSummary(BaseModel):
 class AdminTeamCreateResponse(BaseModel):
     team_id: str
     team_name: str
+    display_id: int | None = None
+    team_code: str | None = None
     status: str
     token_version: int
     bearer_token: str
@@ -81,6 +85,8 @@ class AdminTeamListResponse(BaseModel):
 class AdminTeamDetailResponse(BaseModel):
     team_id: str
     team_name: str
+    display_id: int | None = None
+    team_code: str | None = None
     status: str
     token_version: int
     github_repo_url: str | None = None
@@ -162,6 +168,7 @@ class AdminLeaderboardEntry(BaseModel):
     rank: int
     team_id: str
     team_name: str
+    team_code: str | None = None
     status: str
     aggregate_score: float
     task_success: float
@@ -172,6 +179,8 @@ class AdminLeaderboardEntry(BaseModel):
     efficiency: float
     communication: float
     submissions_count: int
+    duration_seconds: float | None = None
+    tool_calls_total: int | None = None
     last_submission_at: datetime | None = None
 
 
@@ -185,9 +194,12 @@ class AdminSubmissionSummary(BaseModel):
     submission_id: str
     team_id: str
     team_name: str
+    team_code: str | None = None
     attempt_number: int
     status: str
     aggregate_score: float | None = None
+    duration_seconds: float | None = None
+    tool_calls_count: int | None = None
     started_at: datetime
     completed_at: datetime | None = None
 
@@ -205,9 +217,13 @@ class AdminSubmissionDetailResponse(BaseModel):
     submission_id: str
     team_id: str
     team_name: str
+    team_code: str | None = None
     attempt_number: int
     status: str
     aggregate_score: float | None = None
+    duration_seconds: float | None = None
+    tool_calls_count: int | None = None
+    tool_calls_breakdown: dict[str, int] | None = None
     breakdown: dict[str, Any] | None = None
     per_task_results: list[dict[str, Any]] | None = None
     started_at: datetime

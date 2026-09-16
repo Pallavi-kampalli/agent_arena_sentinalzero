@@ -51,9 +51,9 @@ async def test_admin_create_team_success_and_env_snippet(client: AsyncClient, ad
     assert "token" in data
     assert len(data["token"]) > 20
     assert "env_snippet" in data
-    assert f"AGENT_ARENA_TEAM_ID={data['team_id']}" in data["env_snippet"]
-    assert f"AGENT_ARENA_BEARER_TOKEN={data['token']}" in data["env_snippet"]
-    assert "AGENT_ARENA_BASE_URL=" in data["env_snippet"]
+    assert f"SUBMISSION_TEAM_ID={data['team_id']}" in data["env_snippet"]
+    assert f"SUBMISSION_BEARER_TOKEN={data['token']}" in data["env_snippet"]
+    assert "SUBMISSION_ARENA_URL=" in data["env_snippet"]
 
 
 @pytest.mark.asyncio
@@ -196,7 +196,7 @@ async def test_admin_regenerate_token_immediate_revocation(
     new_token = regen_data["token"]
     assert new_token != old_token
     assert regen_data["token_version"] == 2
-    assert f"AGENT_ARENA_BEARER_TOKEN={new_token}" in regen_data["env_snippet"]
+    assert f"SUBMISSION_BEARER_TOKEN={new_token}" in regen_data["env_snippet"]
 
     # 4. Old token fails immediately on next request
     old_resp = await client.post("/submission/start", headers={"Authorization": f"Bearer {old_token}"})

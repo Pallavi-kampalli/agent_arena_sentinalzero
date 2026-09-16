@@ -70,6 +70,11 @@ class ToolsClient:
             )
             self._owns_client = True
         self._on_tool_call = on_tool_call
+        self._active_task_id: str | None = None
+
+    def set_active_task(self, task_id: str) -> None:
+        """Sets the active task ID so subsequent tool calls are scoped to this task."""
+        self._active_task_id = task_id
 
     def close(self) -> None:
         if self._owns_client:
@@ -84,8 +89,11 @@ class ToolsClient:
     def _post(self, path: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
         t0 = time.time()
         tool_name = path.replace("/tools/", "")
+        kwargs: dict[str, Any] = {"json": json_data if json_data is not None else {}}
+        if self._active_task_id:
+            kwargs["headers"] = {"X-Task-ID": self._active_task_id}
         try:
-            resp = self._client.post(path, json=json_data if json_data is not None else {})
+            resp = self._client.post(path, **kwargs)
         except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as e:
             if self._on_tool_call:
                 self._on_tool_call(tool_name, json_data, None, 0, is_error=True)
@@ -262,6 +270,14 @@ class ToolsClient:
         """Finalizes an in-progress submission run to completed status."""
         return self._post(f"/submission/{submission_id}/finalize")
 
+    def submit_batch(self, submission_id: str, answers: list[dict[str, Any]]) -> dict[str, Any]:
+        """Submits all epoch answers in a single batch call."""
+        return self._post(f"/submission/{submission_id}/submit", {"answers": answers})
+
+    def abort_submission(self, submission_id: str) -> dict[str, Any]:
+        """Aborts an active in-progress submission so it is marked interrupted."""
+        return self._post(f"/submission/{submission_id}/abort")
+
 
 class ArenaClient(ToolsClient):
     """Orchestration client for the Agent Arena API.
@@ -283,4 +299,10 @@ class ArenaClient(ToolsClient):
     ):
         super().__init__(base_url=base_url, token=token, timeout=timeout, on_tool_call=on_tool_call)
         self.tools = ToolsClient(client=self._client, on_tool_call=self._on_tool_call)
+
+    def set_active_task(self, task_id: str) -> None:
+        """Sets the active task ID for both the orchestrator and the nested tools client."""
+        super().set_active_task(task_id)
+        self.tools.set_active_task(task_id)
+
 

@@ -506,11 +506,12 @@ class SubmissionStartResponse(BaseModel):
     submission_id: str
     attempt_number: int
     tasks_total: int
+    tasks: list[TaskStartResponse] = Field(default_factory=list)
 
 
 class SubmissionStatusResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    status: Literal["in_progress", "completed", "expired"]
+    status: Literal["in_progress", "completed", "expired", "interrupted"]
     tasks_completed: int
     tasks_total: int
     time_remaining_seconds: int
@@ -520,6 +521,43 @@ class SubmissionFinalizeResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     submission_id: str
     status: Literal["completed"]
+
+
+class BatchTaskSubmitItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    task_id: str
+    decision: Decision
+    evidence: list[str] = Field(default_factory=list)
+    customer_response: str | None = None
+    confidence: float | None = None
+    case_classification: CaseClassification | dict[str, Any] | None = None
+    uncertainties: list[str] = Field(default_factory=list)
+    task_started_at: str | None = None
+    task_completed_at: str | None = None
+
+
+class BatchSubmissionSubmitRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    answers: list[BatchTaskSubmitItem]
+
+
+class BatchSubmissionSubmitResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    submission_id: str
+    status: str
+    tasks_submitted: int
+    tasks_total: int
+    score_pct: float | None = None
+    passed: bool | None = None
+    inter_task_durations: list[float] = Field(default_factory=list)
+
+
+class SubmissionAbortResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    submission_id: str
+    status: str = "interrupted"
+    message: str
+
 
 
 # =============================================================================
@@ -731,9 +769,25 @@ def get_session_id(authorization: str | None) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
 
 
-def get_active_assignment(conn: sqlite3.Connection, session_id: str) -> tuple[int, str, dict[str, Any], str | None]:
-    """Retrieves the active task assignment for the session."""
+def get_active_assignment(
+    conn: sqlite3.Connection, session_id: str, task_id: str | None = None
+) -> tuple[int, str, dict[str, Any], str | None]:
+    """Retrieves the active task assignment for the session, matching task_id if provided."""
     cursor = conn.cursor()
+    if task_id:
+        cursor.execute(
+            """
+            SELECT id, task_id, world_runtime_state, submission_id
+            FROM mock_task_assignments
+            WHERE session_id = ? AND task_id = ?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (session_id, task_id),
+        )
+        row = cursor.fetchone()
+        if row:
+            return row["id"], row["task_id"], json.loads(row["world_runtime_state"]), row["submission_id"]
+
     cursor.execute(
         """
         SELECT id, task_id, world_runtime_state, submission_id
@@ -753,6 +807,7 @@ def get_active_assignment(conn: sqlite3.Connection, session_id: str) -> tuple[in
             },
         )
     return row["id"], row["task_id"], json.loads(row["world_runtime_state"]), row["submission_id"]
+
 
 
 def update_world_state(conn: sqlite3.Connection, assignment_id: int, new_state: dict[str, Any]) -> None:
@@ -1729,12 +1784,16 @@ def root_redirect() -> RedirectResponse:
 
 
 @app.post("/tools/search_knowledge")
-def search_knowledge(req: SearchKnowledgeRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+def search_knowledge(
+    req: SearchKnowledgeRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
         resp = run_read_tool("search_knowledge", world_state, req.model_dump())
         latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
         log_tool_call(
@@ -1746,12 +1805,16 @@ def search_knowledge(req: SearchKnowledgeRequest, authorization: str | None = He
 
 
 @app.post("/tools/get_document")
-def get_document(req: GetDocumentRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+def get_document(
+    req: GetDocumentRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
         resp = run_read_tool("get_document", world_state, req.model_dump())
         latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
         log_tool_call(
@@ -1763,12 +1826,16 @@ def get_document(req: GetDocumentRequest, authorization: str | None = Header(def
 
 
 @app.post("/tools/get_customer")
-def get_customer(req: GetCustomerRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+def get_customer(
+    req: GetCustomerRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
         resp = run_read_tool("get_customer", world_state, req.model_dump())
         latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
         log_tool_call(
@@ -1780,12 +1847,16 @@ def get_customer(req: GetCustomerRequest, authorization: str | None = Header(def
 
 
 @app.post("/tools/get_transactions")
-def get_transactions(req: GetTransactionsRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+def get_transactions(
+    req: GetTransactionsRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
         resp = run_read_tool("get_transactions", world_state, req.model_dump())
         latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
         log_tool_call(
@@ -1797,12 +1868,16 @@ def get_transactions(req: GetTransactionsRequest, authorization: str | None = He
 
 
 @app.post("/tools/get_subscription")
-def get_subscription(req: GetSubscriptionRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+def get_subscription(
+    req: GetSubscriptionRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
         resp = run_read_tool("get_subscription", world_state, req.model_dump())
         latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
         log_tool_call(
@@ -1815,13 +1890,15 @@ def get_subscription(req: GetSubscriptionRequest, authorization: str | None = He
 
 @app.post("/tools/get_previous_cases")
 def get_previous_cases(
-    req: GetPreviousCasesRequest, authorization: str | None = Header(default=None)
+    req: GetPreviousCasesRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
 ) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
         resp = run_read_tool("get_previous_cases", world_state, req.model_dump())
         latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
         log_tool_call(
@@ -1833,12 +1910,18 @@ def get_previous_cases(
 
 
 @app.post("/tools/issue_refund")
-def issue_refund(req: IssueRefundRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+def issue_refund(
+    req: IssueRefundRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        assignment_id, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        assignment_id, task_id, world_state, submission_id = get_active_assignment(
+            conn, session_id, task_id=x_task_id
+        )
         retrieved_ids = get_retrieved_evidence_ids(conn, session_id, task_id)
         mutated, resp, was_rejection = run_action_tool("issue_refund", world_state, req.model_dump(), retrieved_ids)
         if mutated is not None and not was_rejection:
@@ -1854,13 +1937,17 @@ def issue_refund(req: IssueRefundRequest, authorization: str | None = Header(def
 
 @app.post("/tools/cancel_subscription")
 def cancel_subscription(
-    req: CancelSubscriptionRequest, authorization: str | None = Header(default=None)
+    req: CancelSubscriptionRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
 ) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        assignment_id, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        assignment_id, task_id, world_state, submission_id = get_active_assignment(
+            conn, session_id, task_id=x_task_id
+        )
         retrieved_ids = get_retrieved_evidence_ids(conn, session_id, task_id)
         mutated, resp, was_rejection = run_action_tool(
             "cancel_subscription", world_state, req.model_dump(), retrieved_ids
@@ -1885,12 +1972,18 @@ def cancel_subscription(
 
 
 @app.post("/tools/escalate_case")
-def escalate_case(req: EscalateCaseRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+def escalate_case(
+    req: EscalateCaseRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        assignment_id, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        assignment_id, task_id, world_state, submission_id = get_active_assignment(
+            conn, session_id, task_id=x_task_id
+        )
         retrieved_ids = get_retrieved_evidence_ids(conn, session_id, task_id)
         mutated, resp, was_rejection = run_action_tool("escalate_case", world_state, req.model_dump(), retrieved_ids)
         if mutated is not None and not was_rejection:
@@ -1906,13 +1999,17 @@ def escalate_case(req: EscalateCaseRequest, authorization: str | None = Header(d
 
 @app.post("/tools/request_verification")
 def request_verification(
-    req: RequestVerificationRequest, authorization: str | None = Header(default=None)
+    req: RequestVerificationRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
 ) -> dict[str, Any]:
     t0 = time.perf_counter()
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        assignment_id, task_id, world_state, submission_id = get_active_assignment(conn, session_id)
+        assignment_id, task_id, world_state, submission_id = get_active_assignment(
+            conn, session_id, task_id=x_task_id
+        )
         retrieved_ids = get_retrieved_evidence_ids(conn, session_id, task_id)
         mutated, resp, was_rejection = run_action_tool(
             "request_verification", world_state, req.model_dump(), retrieved_ids
@@ -1934,6 +2031,7 @@ def request_verification(
         return resp
     finally:
         conn.close()
+
 
 
 # --- Task Flow Endpoints ---
@@ -2166,8 +2264,12 @@ def start_submission(authorization: str | None = Header(default=None)) -> Submis
         cursor.execute("SELECT COUNT(*) FROM mock_submissions WHERE session_id = ?", (session_id,))
         sub_count = cursor.fetchone()[0]
 
+        cursor.execute("SELECT task_id, input_payload, world_state_seed FROM mock_tasks ORDER BY task_id ASC")
+        task_rows = cursor.fetchall()
+
         sub_id = hashlib.sha256(f"{session_id}-{sub_count + 1}-{time.time()}".encode("utf-8")).hexdigest()[:32]
         now_iso = datetime.now(UTC).isoformat()
+        task_items = []
         with conn:
             conn.execute(
                 """
@@ -2176,9 +2278,173 @@ def start_submission(authorization: str | None = Header(default=None)) -> Submis
                 """,
                 (sub_id, session_id, sub_count + 1, "in_progress", now_iso, json.dumps([])),
             )
-        return SubmissionStartResponse(submission_id=sub_id, attempt_number=sub_count + 1, tasks_total=total_tasks)
+            for row in task_rows:
+                tid = row["task_id"]
+                inp = json.loads(row["input_payload"])
+                w_seed = json.loads(row["world_state_seed"])
+                conn.execute(
+                    """
+                    INSERT INTO mock_task_assignments (session_id, task_id, submission_id, assigned_at, world_runtime_state)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (session_id, tid, sub_id, now_iso, json.dumps(w_seed)),
+                )
+                task_items.append(
+                    TaskStartResponse(
+                        task_id=tid,
+                        customer_id=inp.get("customer_id", ""),
+                        customer_message=inp.get("customer_message", ""),
+                    )
+                )
+
+        return SubmissionStartResponse(
+            submission_id=sub_id,
+            attempt_number=sub_count + 1,
+            tasks_total=total_tasks,
+            tasks=task_items,
+        )
     finally:
         conn.close()
+
+
+@app.post("/submission/{submission_id}/submit", response_model=BatchSubmissionSubmitResponse)
+@app.post("/submission/{submission_id}/submit_batch", response_model=BatchSubmissionSubmitResponse)
+def submit_submission_batch(
+    submission_id: str,
+    req: BatchSubmissionSubmitRequest,
+    authorization: str | None = Header(default=None),
+) -> BatchSubmissionSubmitResponse:
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT status FROM mock_submissions WHERE submission_id = ? AND session_id = ?",
+            (submission_id, session_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "SUBMISSION_NOT_FOUND", "message": f"Submission '{submission_id}' not found."},
+            )
+        if row["status"] != "in_progress":
+            raise HTTPException(
+                status_code=409,
+                detail={"error": "SUBMISSION_CLOSED", "message": f"Submission is already {row['status']}."},
+            )
+
+        cursor.execute("SELECT COUNT(*) FROM mock_tasks")
+        total_tasks = cursor.fetchone()[0]
+
+        results = []
+        passed_count = 0
+        now_iso = datetime.now(UTC).isoformat()
+
+        cursor.execute("SELECT task_id, input_payload, ground_truth_privileged FROM mock_tasks")
+        gt_map = {
+            r["task_id"]: (json.loads(r["input_payload"]), json.loads(r["ground_truth_privileged"]))
+            for r in cursor.fetchall()
+        }
+
+        for item in req.answers:
+            meta = gt_map.get(item.task_id)
+            if not meta:
+                continue
+            inp, gt = meta
+            exp_res = gt.get("expected_resolution")
+            must_esc = gt.get("must_escalate", False)
+            req_ev = gt.get("required_evidence", [])
+
+            resolution_correct = item.decision.resolution == exp_res
+            escalation_correct = item.decision.escalation_required == must_esc
+            ev_set = set(item.evidence)
+            missing_ev = [e for e in req_ev if e not in ev_set]
+            is_correct = resolution_correct and escalation_correct and len(missing_ev) == 0
+            if is_correct:
+                passed_count += 1
+
+            diff_parts = []
+            if not resolution_correct:
+                diff_parts.append(f"Resolution mismatch: expected '{exp_res}', got '{item.decision.resolution}'.")
+            if not escalation_correct:
+                diff_parts.append(f"Escalation mismatch: expected {must_esc}, got {item.decision.escalation_required}.")
+            if missing_ev:
+                diff_parts.append(f"Missing required evidence IDs: {missing_ev}.")
+            diff_str = " ".join(diff_parts) if diff_parts else "Ground truth matched."
+
+            results.append({"task_id": item.task_id, "correct": is_correct, "diff": diff_str})
+
+            conn.execute(
+                """
+                INSERT INTO mock_task_evaluations
+                (session_id, task_id, customer_id, customer_message,
+                 correct, actual_resolution, expected_resolution, actual_escalation,
+                 expected_escalation, actual_evidence, expected_evidence, missing_evidence,
+                 diff_explanation, tool_calls, submitted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session_id,
+                    item.task_id,
+                    inp.get("customer_id", ""),
+                    inp.get("customer_message", ""),
+                    1 if is_correct else 0,
+                    item.decision.resolution,
+                    exp_res,
+                    1 if item.decision.escalation_required else 0,
+                    1 if must_esc else 0,
+                    json.dumps(item.evidence),
+                    json.dumps(req_ev),
+                    json.dumps(missing_ev),
+                    diff_str,
+                    json.dumps([]),
+                    now_iso,
+                ),
+            )
+
+        score_pct = round((passed_count / len(results)) * 100.0, 2) if results else 0.0
+
+        with conn:
+            conn.execute(
+                "UPDATE mock_submissions SET status = 'completed', completed_at = ?, per_task_results = ? WHERE submission_id = ?",
+                (now_iso, json.dumps(results), submission_id),
+            )
+
+        return BatchSubmissionSubmitResponse(
+            submission_id=submission_id,
+            status="completed",
+            tasks_submitted=len(results),
+            tasks_total=total_tasks,
+            score_pct=score_pct,
+            passed=score_pct >= 70.0,
+            inter_task_durations=[],
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/submission/{submission_id}/abort", response_model=SubmissionAbortResponse)
+def abort_submission(
+    submission_id: str, authorization: str | None = Header(default=None)
+) -> SubmissionAbortResponse:
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        now_iso = datetime.now(UTC).isoformat()
+        with conn:
+            conn.execute(
+                "UPDATE mock_submissions SET status = 'interrupted', completed_at = ? WHERE submission_id = ? AND session_id = ?",
+                (now_iso, submission_id, session_id),
+            )
+        return SubmissionAbortResponse(
+            submission_id=submission_id,
+            status="interrupted",
+            message=f"Submission '{submission_id}' was aborted and will not count against submission limit.",
+        )
+    finally:
+        conn.close()
+
 
 
 @app.get("/submission/{submission_id}/status", response_model=SubmissionStatusResponse)

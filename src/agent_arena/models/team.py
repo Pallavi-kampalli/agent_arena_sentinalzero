@@ -17,6 +17,8 @@ class Team(Base):
         default=uuid.uuid4,
     )
     team_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    display_id: Mapped[int | None] = mapped_column(sa.Integer, unique=True, index=True, nullable=True)
+    team_code: Mapped[str | None] = mapped_column(sa.Text, unique=True, index=True, nullable=True)
     members: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(PortableJSON, nullable=True)
     github_repo_url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     bearer_token_hash: Mapped[str] = mapped_column(sa.Text, nullable=False, index=True)

@@ -93,6 +93,8 @@ class AdminService:
                 AdminTeamSummary(
                     team_id=str(team.team_id),
                     team_name=team.team_name,
+                    display_id=team.display_id,
+                    team_code=team.team_code,
                     status=team.status,
                     token_version=team.token_version,
                     github_repo_url=team.github_repo_url,
@@ -127,11 +129,10 @@ class AdminService:
         )
 
         env_snippet = (
-            f"AGENT_ARENA_BASE_URL=http://localhost:8000\n"
-            f"AGENT_ARENA_TEAM_ID={team.team_id}\n"
-            f"AGENT_ARENA_BEARER_TOKEN={raw_token}\n"
-            f"BASE_URL=http://localhost:8000\n"
-            f"BEARER_TOKEN={raw_token}\n"
+            f"SUBMISSION_ARENA_URL=http://localhost:8000\n"
+            f"SUBMISSION_TEAM_ID={team.team_id}\n"
+            f"SUBMISSION_TEAM_CODE={team.team_code}\n"
+            f"SUBMISSION_BEARER_TOKEN={raw_token}\n"
         )
 
         logger.info(
@@ -142,6 +143,8 @@ class AdminService:
         return AdminTeamCreateResponse(
             team_id=str(team.team_id),
             team_name=team.team_name,
+            display_id=team.display_id,
+            team_code=team.team_code,
             status=team.status,
             token_version=team.token_version,
             bearer_token=raw_token,
@@ -239,6 +242,8 @@ class AdminService:
         return AdminTeamDetailResponse(
             team_id=str(team.team_id),
             team_name=team.team_name,
+            display_id=team.display_id,
+            team_code=team.team_code,
             status=team.status,
             token_version=team.token_version,
             github_repo_url=team.github_repo_url,
@@ -352,11 +357,10 @@ class AdminService:
             await self.session.commit()
 
             env_snippet = (
-                f"AGENT_ARENA_BASE_URL=http://localhost:8000\n"
-                f"AGENT_ARENA_TEAM_ID={team.team_id}\n"
-                f"AGENT_ARENA_BEARER_TOKEN={new_raw_token}\n"
-                f"BASE_URL=http://localhost:8000\n"
-                f"BEARER_TOKEN={new_raw_token}\n"
+                f"SUBMISSION_ARENA_URL=http://localhost:8000\n"
+                f"SUBMISSION_TEAM_ID={team.team_id}\n"
+                f"SUBMISSION_TEAM_CODE={team.team_code}\n"
+                f"SUBMISSION_BEARER_TOKEN={new_raw_token}\n"
             )
 
             logger.info(
@@ -527,11 +531,18 @@ class AdminService:
             if selected_sub is not None:
                 dim_breakdown = (selected_sub.breakdown or {}).get("dimensions", {})
                 agg_score = float(selected_sub.aggregate_score) if selected_sub.aggregate_score is not None else 0.0
+                sub_metrics = (selected_sub.breakdown or {}).get("submission_metrics", {})
+                duration_sec = sub_metrics.get("total_duration_seconds")
+                if duration_sec is None and selected_sub.completed_at and selected_sub.started_at:
+                    duration_sec = round((selected_sub.completed_at - selected_sub.started_at).total_seconds(), 2)
+                tool_calls_tot = sub_metrics.get("tool_calls_total")
+
                 entries.append(
                     AdminLeaderboardEntry(
                         rank=0,  # calculated after sort
                         team_id=str(team.team_id),
                         team_name=team.team_name,
+                        team_code=team.team_code,
                         status=team.status,
                         aggregate_score=agg_score,
                         task_success=float(dim_breakdown.get("task_success", 0.0)),
@@ -542,6 +553,8 @@ class AdminService:
                         efficiency=float(dim_breakdown.get("efficiency", 0.0)),
                         communication=float(dim_breakdown.get("communication", 0.0)),
                         submissions_count=int(sub_count),
+                        duration_seconds=float(duration_sec) if duration_sec is not None else None,
+                        tool_calls_total=int(tool_calls_tot) if tool_calls_tot is not None else None,
                         last_submission_at=selected_sub.completed_at,
                     )
                 )
@@ -552,6 +565,7 @@ class AdminService:
                         rank=0,
                         team_id=str(team.team_id),
                         team_name=team.team_name,
+                        team_code=team.team_code,
                         status=team.status,
                         aggregate_score=0.0,
                         task_success=0.0,
@@ -562,6 +576,8 @@ class AdminService:
                         efficiency=0.0,
                         communication=0.0,
                         submissions_count=int(sub_count),
+                        duration_seconds=None,
+                        tool_calls_total=None,
                         last_submission_at=None,
                     )
                 )
@@ -588,8 +604,10 @@ class AdminService:
             [
                 "Rank",
                 "Team Name",
+                "Team Code",
                 "Team ID",
                 "Status",
+                "Duration (s)",
                 "Aggregate Score",
                 "Task Success",
                 "Policy",
@@ -598,6 +616,7 @@ class AdminService:
                 "Calibration",
                 "Efficiency",
                 "Communication",
+                "Tool Calls Total",
                 "Submissions Count",
                 "Last Submission At",
             ]
@@ -607,8 +626,10 @@ class AdminService:
                 [
                     e.rank,
                     e.team_name,
+                    e.team_code or "",
                     e.team_id,
                     e.status,
+                    f"{e.duration_seconds:.1f}" if e.duration_seconds is not None else "",
                     f"{e.aggregate_score:.4f}",
                     f"{e.task_success:.4f}",
                     f"{e.policy:.4f}",
@@ -617,6 +638,7 @@ class AdminService:
                     f"{e.calibration:.4f}",
                     f"{e.efficiency:.4f}",
                     f"{e.communication:.4f}",
+                    e.tool_calls_total if e.tool_calls_total is not None else "",
                     e.submissions_count,
                     e.last_submission_at.isoformat() if e.last_submission_at else "",
                 ]
@@ -635,7 +657,7 @@ class AdminService:
         limit: int = 50,
     ) -> tuple[list[AdminSubmissionSummary], int]:
         """Lists submissions with optional team and status filters."""
-        query = sa.select(Submission, Team.team_name).join(Team, Team.team_id == Submission.team_id)
+        query = sa.select(Submission, Team.team_name, Team.team_code).join(Team, Team.team_id == Submission.team_id)
         if team_id:
             query = query.where(Submission.team_id == team_id)
         if status_filter:
@@ -647,25 +669,35 @@ class AdminService:
         query = query.order_by(Submission.started_at.desc()).offset(offset).limit(limit)
         results = (await self.session.execute(query)).all()
 
-        summaries = [
-            AdminSubmissionSummary(
-                submission_id=str(sub.submission_id),
-                team_id=str(sub.team_id),
-                team_name=team_name,
-                attempt_number=sub.attempt_number,
-                status=sub.status,
-                aggregate_score=float(sub.aggregate_score) if sub.aggregate_score is not None else None,
-                started_at=sub.started_at,
-                completed_at=sub.completed_at,
+        summaries = []
+        for sub, team_name, team_code in results:
+            sub_metrics = (sub.breakdown or {}).get("submission_metrics", {})
+            duration_sec = sub_metrics.get("total_duration_seconds")
+            if duration_sec is None and sub.completed_at and sub.started_at:
+                duration_sec = round((sub.completed_at - sub.started_at).total_seconds(), 2)
+            tool_calls_count = sub_metrics.get("tool_calls_total")
+
+            summaries.append(
+                AdminSubmissionSummary(
+                    submission_id=str(sub.submission_id),
+                    team_id=str(sub.team_id),
+                    team_name=team_name,
+                    team_code=team_code,
+                    attempt_number=sub.attempt_number,
+                    status=sub.status,
+                    aggregate_score=float(sub.aggregate_score) if sub.aggregate_score is not None else None,
+                    duration_seconds=float(duration_sec) if duration_sec is not None else None,
+                    tool_calls_count=int(tool_calls_count) if tool_calls_count is not None else None,
+                    started_at=sub.started_at,
+                    completed_at=sub.completed_at,
+                )
             )
-            for sub, team_name in results
-        ]
         return summaries, total
 
     async def get_submission_detail(self, submission_id: uuid.UUID) -> AdminSubmissionDetailResponse:
         """Retrieves detailed submission scores, dimensions, and per-task audit entries."""
         stmt = (
-            sa.select(Submission, Team.team_name)
+            sa.select(Submission, Team.team_name, Team.team_code)
             .join(Team, Team.team_id == Submission.team_id)
             .where(Submission.submission_id == submission_id)
         )
@@ -676,14 +708,25 @@ class AdminService:
                 detail={"error": "SUBMISSION_NOT_FOUND", "message": f"Submission {submission_id} not found."},
             )
 
-        sub, team_name = row
+        sub, team_name, team_code = row
+        sub_metrics = (sub.breakdown or {}).get("submission_metrics", {})
+        duration_sec = sub_metrics.get("total_duration_seconds")
+        if duration_sec is None and sub.completed_at and sub.started_at:
+            duration_sec = round((sub.completed_at - sub.started_at).total_seconds(), 2)
+        tool_calls_count = sub_metrics.get("tool_calls_total")
+        tool_calls_breakdown = sub_metrics.get("tool_calls_breakdown")
+
         return AdminSubmissionDetailResponse(
             submission_id=str(sub.submission_id),
             team_id=str(sub.team_id),
             team_name=team_name,
+            team_code=team_code,
             attempt_number=sub.attempt_number,
             status=sub.status,
             aggregate_score=float(sub.aggregate_score) if sub.aggregate_score is not None else None,
+            duration_seconds=float(duration_sec) if duration_sec is not None else None,
+            tool_calls_count=int(tool_calls_count) if tool_calls_count is not None else None,
+            tool_calls_breakdown=tool_calls_breakdown,
             breakdown=sub.breakdown,
             per_task_results=sub.per_task_results,
             started_at=sub.started_at,

@@ -52,6 +52,7 @@ class ToolService:
     async def get_active_assignment(
         self,
         team_id: uuid.UUID,
+        task_id: str | None = None,
         for_update: bool = False,
     ) -> TaskAssignment:
         """Resolves the currently active TaskAssignment for an authenticated team.
@@ -59,42 +60,56 @@ class ToolService:
         Acquires locks monotonically: Level 2 (Submission) -> Level 3 (TaskAssignment).
         """
         sub = None
+        # 1. Level 2: Active Submission row
+        sub_stmt = sa.select(Submission).where(Submission.team_id == team_id, Submission.status == "in_progress")
         if for_update:
-            # 1. Level 2 Lock: Active Submission row
-            sub_stmt = (
-                sa.select(Submission)
-                .where(Submission.team_id == team_id, Submission.status == "in_progress")
-                .with_for_update()
-            )
-            sub = (await self.session.execute(sub_stmt)).scalar_one_or_none()
+            sub_stmt = sub_stmt.with_for_update()
+        sub = (await self.session.execute(sub_stmt)).scalar_one_or_none()
 
-            # 2. Level 3 Lock: TaskAssignment row
-            if sub:
-                stmt = (
-                    sa.select(TaskAssignment)
-                    .where(TaskAssignment.submission_id == sub.submission_id)
-                    .order_by(TaskAssignment.id.desc())
-                    .limit(1)
-                    .with_for_update()
-                )
+        # 2. Level 3: TaskAssignment row
+        if sub:
+            if task_id:
+                stmt = sa.select(TaskAssignment).where(
+                    TaskAssignment.submission_id == sub.submission_id,
+                    sa.or_(
+                        TaskAssignment.assigned_task_id == task_id,
+                        TaskAssignment.task_id == task_id,
+                    ),
+                ).order_by(TaskAssignment.id.desc()).limit(1)
             else:
-                stmt = (
-                    sa.select(TaskAssignment)
-                    .where(TaskAssignment.team_id == team_id)
-                    .order_by(TaskAssignment.id.desc())
-                    .limit(1)
-                    .with_for_update()
-                )
+                per_task_results = list(sub.per_task_results or [])
+                submitted_ids = {
+                    r.get("task_id") for r in per_task_results if isinstance(r, dict)
+                } | {
+                    r.get("assigned_task_id") for r in per_task_results if isinstance(r, dict)
+                }
+                stmt = sa.select(TaskAssignment).where(TaskAssignment.submission_id == sub.submission_id)
+                if submitted_ids:
+                    stmt = stmt.where(
+                        TaskAssignment.task_id.not_in(submitted_ids),
+                        sa.or_(
+                            TaskAssignment.assigned_task_id.is_(None),
+                            TaskAssignment.assigned_task_id.not_in(submitted_ids),
+                        ),
+                    )
+                stmt = stmt.order_by(TaskAssignment.id.asc()).limit(1)
         else:
-            stmt = (
-                sa.select(TaskAssignment)
-                .where(TaskAssignment.team_id == team_id)
-                .order_by(TaskAssignment.id.desc())
-                .limit(1)
-            )
+            stmt = sa.select(TaskAssignment).where(TaskAssignment.team_id == team_id)
+            if task_id:
+                stmt = stmt.where(
+                    sa.or_(
+                        TaskAssignment.assigned_task_id == task_id,
+                        TaskAssignment.task_id == task_id,
+                    )
+                )
+            stmt = stmt.order_by(TaskAssignment.id.desc()).limit(1)
+
+        if for_update:
+            stmt = stmt.with_for_update()
 
         result = await self.session.execute(stmt)
         assignment = result.scalar_one_or_none()
+
         if not assignment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -663,6 +678,7 @@ class ToolService:
         tool_name: str,
         payload: dict[str, Any],
         is_action: bool = False,
+        task_id: str | None = None,
     ) -> dict[str, Any]:
         """Runs a tool call through rate limiting, row locking, enforcement, mutation, and logging."""
         t0 = time.perf_counter()
@@ -673,7 +689,7 @@ class ToolService:
                 # 1. Resolve active assignment with row-level lock in PostgreSQL (FOR UPDATE)
                 # Acquired FIRST inside the transaction so all subsequent queries (rate limit, budget, state)
                 # are strictly serialized across all worker processes/instances.
-                assignment = await self.get_active_assignment(team.team_id, for_update=True)
+                assignment = await self.get_active_assignment(team.team_id, task_id=task_id, for_update=True)
 
                 # 2. Consolidated team rate limit & task budget check (protected by row lock, single query)
                 await ToolLimiter.check_limits(self.session, team.team_id, assignment.task_id, self.settings_service)

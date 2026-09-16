@@ -65,7 +65,11 @@ async def test_task_time_budget_enforcement_and_auto_timeout(
 
     # Manipulate assigned_at into the past (70s ago -> exceeds 60s budget)
     assign_row = (
-        await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id_1))
+        await db_session.execute(
+            sa.select(TaskAssignment).where(
+                sa.or_(TaskAssignment.task_id == task_id_1, TaskAssignment.assigned_task_id == task_id_1)
+            )
+        )
     ).scalar_one()
     past_time = datetime.now(UTC) - timedelta(seconds=70)
     assign_row.assigned_at = past_time
@@ -116,7 +120,11 @@ async def test_live_settings_time_budget_extension(client: AsyncClient, db_sessi
 
     # Manipulate assigned_at into the past (70s ago -> exceeds original 60s budget)
     assign_row = (
-        await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.task_id == task_id_1))
+        await db_session.execute(
+            sa.select(TaskAssignment).where(
+                sa.or_(TaskAssignment.task_id == task_id_1, TaskAssignment.assigned_task_id == task_id_1)
+            )
+        )
     ).scalar_one()
     assign_row.assigned_at = datetime.now(UTC) - timedelta(seconds=70)
     await db_session.commit()

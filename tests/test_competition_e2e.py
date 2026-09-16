@@ -263,7 +263,7 @@ async def prod_team_and_task(prod_server):
         await session.execute(sa.delete(Team).where(Team.team_id == team_id))
         # Restore canonical default
         settings = SettingsService(session)
-        await settings.set("hidden_task_count", 60)
+        await settings.set("hidden_task_count", 30)
         await session.commit()
 
 

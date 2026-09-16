@@ -377,18 +377,73 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     button.btn-secondary { background: var(--border); color: var(--text); }
     input, select { background: #0f172a; border: 1px solid var(--border); color: #fff; padding: 8px 12px; border-radius: 4px; font-size: 13px; }
     .controls { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
-    #auth-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; }
-    .modal-box { background: var(--panel); padding: 24px; border-radius: 8px; border: 1px solid var(--border); width: 360px; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-box { background: var(--panel); padding: 24px; border-radius: 8px; border: 1px solid var(--border); width: 440px; max-width: 90vw; }
+    .modal-box.wide { width: 680px; }
+    .form-group { margin-bottom: 14px; text-align: left; }
+    .form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+    .form-group input, .form-group textarea { width: 100%; box-sizing: border-box; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
     pre { background: #0f172a; padding: 12px; border-radius: 4px; font-size: 12px; overflow-x: auto; color: var(--success); }
   </style>
 </head>
 <body>
-  <div id="auth-modal" style="display:none;">
+  <!-- Admin Authentication Modal -->
+  <div id="auth-modal" class="modal-backdrop">
     <div class="modal-box">
       <h2 style="font-size:16px;margin-bottom:12px;">Admin Authentication</h2>
       <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter the ADMIN_PANEL_SECRET to unlock the control plane.</p>
       <input id="secret-input" type="password" style="width:100%;margin-bottom:12px;" placeholder="Admin Secret">
       <button style="width:100%;" onclick="authenticate()">Unlock Dashboard</button>
+    </div>
+  </div>
+
+  <!-- Team Registration Modal -->
+  <div id="team-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <h2 style="font-size:16px;margin-bottom:8px;">Register New Competition Team</h2>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px;">Create credentials for a participating team in the live arena.</p>
+      <div class="form-group">
+        <label>Team Name *</label>
+        <input id="create-team-name" type="text" placeholder="e.g. Apex-Agents" required>
+      </div>
+      <div class="form-group">
+        <label>Members (comma-separated names/emails)</label>
+        <input id="create-team-members" type="text" placeholder="e.g. Alice &lt;alice@example.com&gt;, Bob">
+      </div>
+      <div class="form-group">
+        <label>GitHub Repository URL (optional)</label>
+        <input id="create-team-github" type="url" placeholder="https://github.com/team/agent">
+      </div>
+      <div id="team-modal-error" style="color:var(--danger);font-size:12px;display:none;margin-bottom:12px;"></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeCreateTeamModal()">Cancel</button>
+        <button onclick="submitCreateTeam()">Register Team</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Token / Environment Snippet Modal -->
+  <div id="token-modal" class="modal-backdrop">
+    <div class="modal-box wide">
+      <h2 style="font-size:16px;margin-bottom:8px;" id="token-modal-title">Team Credentials</h2>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Copy this configuration snippet directly into your team's <code>.env</code> file:</p>
+      <pre id="token-modal-snippet" style="max-height:260px;"></pre>
+      <div class="modal-actions">
+        <button id="copy-token-btn" onclick="copyTokenSnippet()">📋 Copy to Clipboard</button>
+        <button class="btn-secondary" onclick="closeTokenModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submission Detail Modal -->
+  <div id="submission-modal" class="modal-backdrop">
+    <div class="modal-box wide">
+      <h2 style="font-size:16px;margin-bottom:8px;" id="sub-modal-title">Submission Inspection</h2>
+      <div id="sub-modal-content" style="font-size:13px;max-height:420px;overflow-y:auto;"></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeSubmissionModal()">Close</button>
+      </div>
     </div>
   </div>
 
@@ -441,7 +496,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       </div>
       <table id="teams-table">
         <thead>
-          <tr><th>Team Name</th><th>Status</th><th>Token Ver</th><th>Submissions</th><th>Actions</th></tr>
+          <tr><th>Team Name</th><th>Team ID</th><th>Status</th><th>Token Ver</th><th>Submissions</th><th>Actions</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -473,7 +528,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       </div>
       <table id="leaderboard-table">
         <thead>
-          <tr><th>Rank</th><th>Team</th><th>Score</th><th>Task Success</th><th>Policy</th><th>Robustness</th><th>Evidence</th><th>Calibration</th><th>Efficiency</th><th>Comm</th></tr>
+          <tr><th>Rank</th><th>Team</th><th>Team ID</th><th>Score</th><th>Duration</th><th>Task Success</th><th>Policy</th><th>Robustness</th><th>Evidence</th><th>Calibration</th><th>Efficiency</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -485,7 +540,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div class="panel">
       <h2 style="font-size:16px;margin-bottom:12px;">Submissions Evaluation</h2>
       <table id="submissions-table">
-        <thead><tr><th>Submission ID</th><th>Team</th><th>Attempt</th><th>Status</th><th>Score</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Submission ID</th><th>Team</th><th>Team ID</th><th>Attempt</th><th>Status</th><th>Score</th><th>Duration</th><th>Tool Calls</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -581,6 +636,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       tbody.innerHTML = d.teams.map(t => `
         <tr>
           <td><strong>${t.team_name}</strong><br><span style="font-size:11px;color:var(--muted)">${t.team_id}</span></td>
+          <td><span class="badge" style="background:rgba(56,189,248,0.2);color:var(--primary);font-size:12px;font-weight:700;">${t.team_code || t.display_id || '-'}</span></td>
           <td><span class="badge" style="background:${t.status==='active'?'rgba(74,222,128,0.2)':'rgba(248,113,113,0.2)'}">${t.status}</span></td>
           <td>${t.token_version}</td>
           <td>${t.submissions_count}</td>
@@ -594,6 +650,76 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       `).join('');
     }
 
+    function showCreateTeamModal() {
+      document.getElementById('create-team-name').value = '';
+      document.getElementById('create-team-members').value = '';
+      document.getElementById('create-team-github').value = '';
+      document.getElementById('team-modal-error').style.display = 'none';
+      document.getElementById('team-modal').style.display = 'flex';
+    }
+
+    function closeCreateTeamModal() {
+      document.getElementById('team-modal').style.display = 'none';
+    }
+
+    async function submitCreateTeam() {
+      const name = document.getElementById('create-team-name').value.trim();
+      const errEl = document.getElementById('team-modal-error');
+      if (!name) {
+        errEl.innerText = 'Team Name is required.';
+        errEl.style.display = 'block';
+        return;
+      }
+      const rawMembers = document.getElementById('create-team-members').value.trim();
+      const members = rawMembers ? rawMembers.split(',').map(m => m.trim()).filter(Boolean) : [];
+      const github = document.getElementById('create-team-github').value.trim() || null;
+
+      try {
+        const res = await api('/teams', {
+          method: 'POST',
+          body: {
+            team_name: name,
+            members: members,
+            github_repo_url: github
+          }
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || 'Registration failed');
+        }
+        const d = await res.json();
+        closeCreateTeamModal();
+        loadTeams();
+        showTokenModal(d.env_snippet, d.team_name);
+      } catch (e) {
+        errEl.innerText = 'Registration failed: ' + (e.message || 'Unknown error');
+        errEl.style.display = 'block';
+      }
+    }
+
+    function showTokenModal(snippet, teamName) {
+      document.getElementById('token-modal-title').innerText = teamName ? ('Credentials for ' + teamName) : 'Team Credentials';
+      document.getElementById('token-modal-snippet').innerText = snippet;
+      document.getElementById('token-modal').style.display = 'flex';
+      const btn = document.getElementById('copy-token-btn');
+      btn.innerText = '📋 Copy to Clipboard';
+    }
+
+    function closeTokenModal() {
+      document.getElementById('token-modal').style.display = 'none';
+    }
+
+    function copyTokenSnippet() {
+      const text = document.getElementById('token-modal-snippet').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copy-token-btn');
+        btn.innerText = '✅ Copied!';
+        setTimeout(() => { btn.innerText = '📋 Copy to Clipboard'; }, 2000);
+      }).catch(() => {
+        alert('Could not copy automatically. Please copy the text manually.');
+      });
+    }
+
     async function setTeamStatus(teamId, status) {
       if (!confirm('Confirm status update to ' + status + '?')) return;
       await api('/teams/' + teamId + '/status', { method: 'POST', body: { status } });
@@ -602,10 +728,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
     async function regenerateToken(teamId) {
       if (!confirm('Regenerating will immediately revoke the team\\'s active token. Proceed?')) return;
-      const res = await api('/teams/' + teamId + '/regenerate-token', { method: 'POST' });
-      const d = await res.json();
-      alert('New Token Generated!\\n\\n' + d.env_snippet);
-      loadTeams();
+      try {
+        const res = await api('/teams/' + teamId + '/regenerate-token', { method: 'POST' });
+        const d = await res.json();
+        loadTeams();
+        showTokenModal(d.env_snippet, d.team_name);
+      } catch (e) {
+        alert('Token regeneration failed: ' + (e.message || 'Unknown error'));
+      }
     }
 
     async function loadLeaderboard() {
@@ -616,15 +746,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       tbody.innerHTML = d.leaderboard.map(e => `
         <tr>
           <td><strong>#${e.rank}</strong></td>
-          <td>${e.team_name}</td>
+          <td><strong>${e.team_name}</strong></td>
+          <td><span class="badge" style="background:rgba(56,189,248,0.2);color:var(--primary);font-size:11px;">${e.team_code || '-'}</span></td>
           <td><strong>${(e.aggregate_score * 100).toFixed(2)}%</strong></td>
+          <td>${e.duration_seconds !== null && e.duration_seconds !== undefined ? e.duration_seconds.toFixed(1) + 's' : '-'}</td>
           <td>${(e.task_success * 100).toFixed(1)}%</td>
           <td>${(e.policy * 100).toFixed(1)}%</td>
           <td>${(e.robustness * 100).toFixed(1)}%</td>
           <td>${(e.evidence * 100).toFixed(1)}%</td>
           <td>${(e.calibration * 100).toFixed(1)}%</td>
           <td>${(e.efficiency * 100).toFixed(1)}%</td>
-          <td>${(e.communication * 100).toFixed(1)}%</td>
         </tr>
       `).join('');
     }
@@ -664,16 +795,71 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       tbody.innerHTML = d.submissions.map(s => `
         <tr>
           <td><code>${s.submission_id.substring(0,8)}...</code></td>
-          <td>${s.team_name}</td>
+          <td><strong>${s.team_name}</strong></td>
+          <td><span class="badge" style="background:rgba(56,189,248,0.2);color:var(--primary);font-size:11px;">${s.team_code || '-'}</span></td>
           <td>#${s.attempt_number}</td>
-          <td>${s.status}</td>
+          <td><span class="badge" style="background:${s.status==='completed'?'rgba(74,222,128,0.2)':s.status==='in_progress'?'rgba(56,189,248,0.2)':'rgba(248,113,113,0.2)'}">${s.status}</span></td>
           <td>${s.aggregate_score !== null ? (s.aggregate_score * 100).toFixed(2) + '%' : '-'}</td>
+          <td>${s.duration_seconds !== null && s.duration_seconds !== undefined ? s.duration_seconds.toFixed(1) + 's' : '-'}</td>
+          <td>${s.tool_calls_count !== null && s.tool_calls_count !== undefined ? s.tool_calls_count : '-'}</td>
           <td>
+            <button class="btn-secondary" onclick="showSubmissionDetail('${s.submission_id}')">Inspect</button>
             <button class="btn-secondary" onclick="scoreSub('${s.submission_id}', false)">Score</button>
             <button class="btn-danger" onclick="scoreSub('${s.submission_id}', true)">Force Rescore</button>
           </td>
         </tr>
       `).join('');
+    }
+
+    async function showSubmissionDetail(subId) {
+      try {
+        const res = await api('/submissions/' + subId);
+        const d = await res.json();
+        document.getElementById('sub-modal-title').innerText = d.team_name + (d.team_code ? ' (' + d.team_code + ')' : '') + ' — Attempt #' + d.attempt_number;
+        const brk = d.breakdown || {};
+        const dims = brk.dimension_scores || {};
+        let dimHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:8px;margin:12px 0;">';
+        for (const [k, v] of Object.entries(dims)) {
+          dimHtml += '<div style="background:#0f172a;padding:8px;border-radius:4px;border:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">' + k + '</div><div style="font-size:16px;font-weight:700;color:var(--primary);">' + (v * 100).toFixed(1) + '%</div></div>';
+        }
+        dimHtml += '</div>';
+
+        let toolChips = '';
+        if (d.tool_calls_breakdown && Object.keys(d.tool_calls_breakdown).length > 0) {
+          toolChips = '<div style="margin:12px 0;"><strong style="font-size:12px;color:var(--muted);text-transform:uppercase;">Tool Calls Breakdown:</strong><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">' +
+            Object.entries(d.tool_calls_breakdown).map(([tool, cnt]) => '<span class="badge" style="background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text);font-size:11px;">' + tool + ': <strong>' + cnt + '</strong></span>').join('') +
+            '</div></div>';
+        }
+
+        const tasksEvaluated = d.tasks_evaluated || [];
+        let taskHtml = '<h3 style="font-size:14px;margin-top:14px;margin-bottom:6px;">Evaluated Tasks (' + tasksEvaluated.length + ')</h3>';
+        if (tasksEvaluated.length > 0) {
+          taskHtml += '<table style="font-size:11px;"><thead><tr><th>Task ID</th><th>Status</th><th>Score</th><th>Evidence</th></tr></thead><tbody>';
+          taskHtml += tasksEvaluated.slice(0, 30).map(t => '<tr><td><code>' + t.task_id + '</code></td><td>' + (t.status || 'evaluated') + '</td><td>' + ((t.score !== undefined ? (t.score * 100).toFixed(1) + '%' : '-')) + '</td><td>' + (t.evidence_matched ? '✅ Matched' : '❌ Miss') + '</td></tr>').join('');
+          taskHtml += '</tbody></table>';
+        } else {
+          taskHtml += '<p style="color:var(--muted);font-size:12px;">No task audit records scored yet.</p>';
+        }
+
+        document.getElementById('sub-modal-content').innerHTML = `
+          <div style="display:flex;gap:14px;align-items:center;margin-bottom:12px;flex-wrap:wrap;font-size:13px;">
+            <div><strong>Status:</strong> <span class="badge" style="background:${d.status==='completed'?'rgba(74,222,128,0.2)':d.status==='in_progress'?'rgba(56,189,248,0.2)':'rgba(248,113,113,0.2)'};">${d.status}</span></div>
+            <div><strong>Score:</strong> <span style="font-weight:700;color:var(--primary);">${d.aggregate_score !== null ? (d.aggregate_score * 100).toFixed(2) + '%' : 'Pending'}</span></div>
+            <div><strong>Duration:</strong> ${d.duration_seconds !== null && d.duration_seconds !== undefined ? d.duration_seconds.toFixed(1) + 's' : '-'}</div>
+            <div><strong>Tool Calls:</strong> ${d.tool_calls_count !== null && d.tool_calls_count !== undefined ? d.tool_calls_count : '0'}</div>
+          </div>
+          ${toolChips}
+          ${dimHtml}
+          ${taskHtml}
+        `;
+        document.getElementById('submission-modal').style.display = 'flex';
+      } catch (e) {
+        alert('Failed to load submission detail: ' + e.message);
+      }
+    }
+
+    function closeSubmissionModal() {
+      document.getElementById('submission-modal').style.display = 'none';
     }
 
     async function scoreSub(id, force) {

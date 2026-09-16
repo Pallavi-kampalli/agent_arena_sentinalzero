@@ -28,6 +28,11 @@ class TaskAssignment(Base):
         nullable=False,
         index=True,
     )
+    assigned_task_id: Mapped[str | None] = mapped_column(
+        sa.Text,
+        nullable=True,
+        index=True,
+    )
     submission_id: Mapped[uuid.UUID | None] = mapped_column(
         PortableUUID,
         sa.ForeignKey("submissions.submission_id", ondelete="SET NULL"),

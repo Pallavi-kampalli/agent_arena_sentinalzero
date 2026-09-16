@@ -56,9 +56,17 @@ async def register_team(
     raw_token = create_bearer_token(team_id, token_version, expiry_hours=expiry_hours)
     token_hash = hash_token(raw_token)
 
+    # Assign sequential 5-digit display_id starting at 10001
+    max_disp_res = await session.execute(sa.select(sa.func.max(Team.display_id)))
+    max_disp = max_disp_res.scalar()
+    next_disp = 10001 if max_disp is None else max_disp + 1
+    team_code = f"T-{next_disp}"
+
     team = Team(
         team_id=team_id,
         team_name=team_name,
+        display_id=next_disp,
+        team_code=team_code,
         members=members,
         github_repo_url=github_repo_url,
         bearer_token_hash=token_hash,
