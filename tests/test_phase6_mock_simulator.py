@@ -24,7 +24,7 @@ async def test_mock_tasks_table_loaded():
     cursor.execute("SELECT COUNT(*) FROM mock_tasks")
     count = cursor.fetchone()[0]
     conn.close()
-    assert count == 70
+    assert count == 30
 
 
 @pytest.mark.asyncio
@@ -157,14 +157,14 @@ async def test_mock_submission_lifecycle():
         data = sub_start.json()
         sub_id = data["submission_id"]
         assert data["attempt_number"] == 1
-        assert data["tasks_total"] == 70
+        assert data["tasks_total"] == 30
 
         # 2. Get status
         status_res = await client.get(f"/submission/{sub_id}/status", headers=headers)
         assert status_res.status_code == 200
         status_data = status_res.json()
         assert status_data["status"] == "in_progress"
-        assert status_data["tasks_total"] == 70
+        assert status_data["tasks_total"] == 30
 
         # 3. Finalize
         fin_res = await client.post(f"/submission/{sub_id}/finalize", headers=headers)

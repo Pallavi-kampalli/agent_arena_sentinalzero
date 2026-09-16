@@ -1,3 +1,3 @@
-from sdk.tools_client import ApiError, ToolsClient, TransportError
+from .tools_client import ApiError, ArenaClient, ToolsClient, TransportError
 
-__all__ = ["ToolsClient", "ApiError", "TransportError"]
+__all__ = ["ToolsClient", "ArenaClient", "ApiError", "TransportError"]

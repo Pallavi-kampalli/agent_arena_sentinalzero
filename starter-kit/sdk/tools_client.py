@@ -1,4 +1,14 @@
+"""Agent Arena SupportOps — Official Python SDK.
+
+Provides two clean client interfaces:
+1. ToolsClient: Participant-facing client passed to agent.solve(task, tools).
+   Contains ONLY the 10 SupportOps read and action tools.
+2. ArenaClient: Orchestration client used by main.py.
+   Handles connection, auth, task retrieval, submission, and lifecycle.
+"""
+
 import os
+import time
 from typing import Any
 
 import httpx
@@ -22,33 +32,48 @@ class ApiError(Exception):
 
 
 class ToolsClient:
-    """Thin HTTP client for the Agent Arena SupportOps competition API.
+    """Participant-facing tools client passed into agent.solve(task, tools).
 
-    Works identically against the local Mock Simulator and the live Production API.
-    Zero business logic. Distinguishes transport/API failures from server-side domain rejections.
+    Exposes ONLY the 10 SupportOps read and action tools.
+    The agent does NOT need to manage tasks, polling, or submissions.
     """
 
     def __init__(
         self,
-        base_url: str | None = None,
+        base_url: str | httpx.Client | None = None,
         token: str | None = None,
         timeout: float = 30.0,
+        on_tool_call: Any | None = None,
+        client: httpx.Client | None = None,
     ):
-        raw_url = base_url or os.getenv("BASE_URL") or "http://localhost:8000"
-        self.base_url = raw_url.rstrip("/")
-        self.token = token or os.getenv("BEARER_TOKEN") or "dev-practice-token"
-        self.timeout = timeout
-        self._client = httpx.Client(
-            base_url=self.base_url,
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-            },
-            timeout=self.timeout,
-        )
+        if client is not None:
+            self._client = client
+            self._owns_client = False
+            self.base_url = str(client.base_url).rstrip("/")
+            self.token = token or ""
+        elif isinstance(base_url, httpx.Client):
+            self._client = base_url
+            self._owns_client = False
+            self.base_url = str(base_url.base_url).rstrip("/")
+            self.token = token or ""
+        else:
+            raw_url = base_url or os.getenv("BASE_URL") or "http://localhost:8000"
+            self.base_url = raw_url.rstrip("/")
+            self.token = token or os.getenv("BEARER_TOKEN") or "dev-practice-token"
+            self._client = httpx.Client(
+                base_url=self.base_url,
+                headers={
+                    "Authorization": f"Bearer {self.token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=timeout,
+            )
+            self._owns_client = True
+        self._on_tool_call = on_tool_call
 
     def close(self) -> None:
-        self._client.close()
+        if self._owns_client:
+            self._client.close()
 
     def __enter__(self) -> "ToolsClient":
         return self
@@ -57,38 +82,31 @@ class ToolsClient:
         self.close()
 
     def _post(self, path: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+        t0 = time.time()
+        tool_name = path.replace("/tools/", "")
         try:
             resp = self._client.post(path, json=json_data if json_data is not None else {})
         except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as e:
+            if self._on_tool_call:
+                self._on_tool_call(tool_name, json_data, None, 0, is_error=True)
             raise TransportError(f"Network transport error calling {path}: {e}", original_exception=e) from e
+
+        latency_ms = int((time.time() - t0) * 1000)
 
         if resp.status_code >= 400:
             try:
                 err_detail = resp.json()
             except Exception:
                 err_detail = resp.text
+            if self._on_tool_call:
+                self._on_tool_call(tool_name, json_data, err_detail, latency_ms, is_error=True)
             raise ApiError(resp.status_code, err_detail)
 
         try:
-            return resp.json()
-        except Exception as e:
-            raise TransportError(f"Malformed JSON response from {path}: {resp.text}", original_exception=e) from e
-
-    def _get(self, path: str) -> dict[str, Any]:
-        try:
-            resp = self._client.get(path)
-        except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as e:
-            raise TransportError(f"Network transport error calling {path}: {e}", original_exception=e) from e
-
-        if resp.status_code >= 400:
-            try:
-                err_detail = resp.json()
-            except Exception:
-                err_detail = resp.text
-            raise ApiError(resp.status_code, err_detail)
-
-        try:
-            return resp.json()
+            data = resp.json()
+            if self._on_tool_call:
+                self._on_tool_call(tool_name, json_data, data, latency_ms, is_error=False)
+            return data
         except Exception as e:
             raise TransportError(f"Malformed JSON response from {path}: {resp.text}", original_exception=e) from e
 
@@ -176,62 +194,61 @@ class ToolsClient:
             },
         )
 
-    # =========================================================================
-    # Task Flow Endpoints
-    # =========================================================================
 
-    def start_task(self) -> dict[str, Any]:
+    def _get(self, path: str) -> dict[str, Any]:
+        try:
+            resp = self._client.get(path)
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as e:
+            raise TransportError(f"Network transport error calling {path}: {e}", original_exception=e) from e
+
+        if resp.status_code >= 400:
+            try:
+                err_detail = resp.json()
+            except Exception:
+                err_detail = resp.text
+            raise ApiError(resp.status_code, err_detail)
+
+        try:
+            return resp.json()
+        except Exception as e:
+            raise TransportError(f"Malformed JSON response from {path}: {resp.text}", original_exception=e) from e
+
+    # --- Task and Submission Flow (orchestration / compatibility methods) ---
+
+    def get_task(self) -> dict[str, Any]:
         """Requests assignment of the next task in the active submission or practice pool."""
         return self._post("/task/start")
 
+    # Backwards compatibility alias
+    start_task = get_task
+
     def submit_task(
         self,
-        task_id: str | None = None,
+        task_id: str,
         case_classification: dict[str, Any] | None = None,
         decision: dict[str, Any] | None = None,
         evidence: list[str] | None = None,
         uncertainties: list[str] | None = None,
         customer_response: str | None = None,
         confidence: float | None = None,
-        *,
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Submits structured decision, evidence citations, and response for grading.
-
-        Can be called with individual canonical parameters:
-            tools.submit_task(
-                task_id=task_id,
-                case_classification=...,
-                decision=...,
-                evidence=...,
-                uncertainties=...,
-                customer_response=...,
-                confidence=...,
-            )
-        Or directly with the SupportOps Section 7 agent solve output:
-            tools.submit_task(task_id=task_id, payload=output)
-        """
+        """Submits structured decision, evidence citations, and response for grading."""
         if payload is not None:
             body = dict(payload)
-            if task_id is not None:
-                body["task_id"] = task_id
         else:
-            if task_id is None:
-                raise ValueError("task_id is required")
             body = {
-                "task_id": task_id,
                 "case_classification": case_classification,
                 "decision": decision,
-                "evidence": evidence if evidence is not None else [],
-                "uncertainties": uncertainties if uncertainties is not None else [],
+                "evidence": evidence,
+                "uncertainties": uncertainties,
                 "customer_response": customer_response,
                 "confidence": confidence,
             }
+        body["task_id"] = task_id
         return self._post("/task/submit", body)
 
-    # =========================================================================
-    # Submission Lifecycle Endpoints
-    # =========================================================================
+    # --- Submission Lifecycle ---
 
     def start_submission(self) -> dict[str, Any]:
         """Starts a full evaluation submission run."""
@@ -244,3 +261,26 @@ class ToolsClient:
     def finalize_submission(self, submission_id: str) -> dict[str, Any]:
         """Finalizes an in-progress submission run to completed status."""
         return self._post(f"/submission/{submission_id}/finalize")
+
+
+class ArenaClient(ToolsClient):
+    """Orchestration client for the Agent Arena API.
+
+    Used by main.py to handle:
+    - Connection & authentication
+    - Task retrieval (get_task)
+    - Task submission (submit_task)
+    - Submission lifecycle (start_submission, get_submission_status, finalize_submission)
+    - Provides scoped ToolsClient for the agent via self.tools.
+    """
+
+    def __init__(
+        self,
+        base_url: str | None = None,
+        token: str | None = None,
+        timeout: float = 30.0,
+        on_tool_call: Any | None = None,
+    ):
+        super().__init__(base_url=base_url, token=token, timeout=timeout, on_tool_call=on_tool_call)
+        self.tools = ToolsClient(client=self._client, on_tool_call=self._on_tool_call)
+

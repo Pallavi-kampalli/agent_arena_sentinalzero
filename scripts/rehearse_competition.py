@@ -31,7 +31,90 @@ sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
 from agent import solve as starter_kit_solve  # noqa: E402
 from sdk.tools_client import ToolsClient  # noqa: E402
 
-from agent_arena.tasks.solver import ReferenceSolverParticipantAdapter  # noqa: E402
+def solve_expert(task: dict[str, Any], tools: ToolsClient) -> dict[str, Any]:
+    """Expert agent: actively inspects customer records, transactions, policies, and takes authorized actions."""
+    customer_id = task.get("customer_id", "")
+    message = task.get("customer_message", "").lower()
+
+    evidence: list[str] = []
+    uncertainties: list[str] = []
+
+    try:
+        cust_resp = tools.get_customer(customer_id)
+        if "customer" in cust_resp and "id" in cust_resp["customer"]:
+            evidence.append(cust_resp["customer"]["id"])
+    except Exception as e:
+        uncertainties.append(f"Failed to fetch customer: {e}")
+
+    transactions = []
+    try:
+        tx_resp = tools.get_transactions(customer_id)
+        transactions = tx_resp.get("transactions", [])
+        for tx in transactions[:3]:
+            if "id" in tx:
+                evidence.append(tx["id"])
+    except Exception as e:
+        uncertainties.append(f"Failed to fetch transactions: {e}")
+
+    try:
+        search_resp = tools.search_knowledge("refund duplicate cancellation policy", top_k=3)
+        results = search_resp.get("results", [])
+        if results:
+            policy_doc_id = results[0]["id"]
+            evidence.append(policy_doc_id)
+            doc_resp = tools.get_document(policy_doc_id)
+            if "document" in doc_resp and "id" in doc_resp["document"]:
+                evidence.append(doc_resp["document"]["id"])
+    except Exception as e:
+        uncertainties.append(f"Failed to retrieve policy document: {e}")
+
+    category = "billing"
+    issue = "general_inquiry"
+    severity = "medium"
+
+    if "duplicate" in message or "charged twice" in message:
+        issue = "duplicate_payment"
+    elif "cancel" in message:
+        category = "account"
+        issue = "subscription_cancellation"
+    elif "fraud" in message or "unauthorized" in message:
+        category = "security"
+        issue = "fraud_suspicion"
+        severity = "high"
+    elif "refund" in message:
+        issue = "refund_request"
+
+    resolution = "deny"
+    escalation_required = False
+    customer_response = "Thank you for reaching SupportOps. We have reviewed your account details."
+
+    if issue in ("duplicate_payment", "refund_request") and transactions:
+        target_tx = transactions[0]
+        tx_id = target_tx.get("id")
+        amount = float(target_tx.get("amount", 0.0))
+        try:
+            res = tools.issue_refund(transaction_id=tx_id, amount=amount, reason="Customer requested refund")
+            if res.get("status") == "success":
+                resolution = "refund"
+                if "transaction" in res and "id" in res["transaction"]:
+                    evidence.append(res["transaction"]["id"])
+            elif res.get("error") == "INELIGIBLE":
+                if res.get("reason") == "chargeback_investigation_active":
+                    escalation_required = True
+                    resolution = "escalate"
+                else:
+                    resolution = "deny"
+        except Exception:
+            resolution = "deny"
+
+    return {
+        "case_classification": {"category": category, "issue": issue, "severity": severity},
+        "decision": {"resolution": resolution, "escalation_required": escalation_required},
+        "evidence": list(set(evidence)),
+        "uncertainties": uncertainties,
+        "customer_response": customer_response,
+        "confidence": 0.95,
+    }
 
 
 def solve_naive(task: dict[str, Any], tools: ToolsClient) -> dict[str, Any]:
@@ -123,8 +206,8 @@ def main() -> None:
                 "key": "alpha",
                 "name": f"Alpha-Expert-{rehearsal_run_id}",
                 "email": f"alpha-{rehearsal_run_id}@arena-rehearsal.org",
-                "strategy": "ReferenceSolver (Phase 1 Canonical)",
-                "solver": ReferenceSolverParticipantAdapter.solve,
+                "strategy": "Expert Agent (Active Tool-Assisted Grounding)",
+                "solver": solve_expert,
             },
             {
                 "key": "beta",

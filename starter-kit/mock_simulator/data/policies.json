@@ -1,0 +1,157 @@
+[
+  {
+    "id": "DOC-1001",
+    "title": "Authoritative Customer Refund Policy",
+    "category": "refund",
+    "version": "2.1",
+    "updated_at": "2026-06-01T00:00:00Z",
+    "is_authoritative": true,
+    "rules": {
+      "refund_window_days": 30,
+      "max_automated_amount": 500.0,
+      "allow_during_chargeback": false
+    },
+    "content": "Section 1: General Refund Eligibility.\nCustomers may request a refund for eligible purchases within thirty (30) days of the original transaction date. Requests beyond 30 days are ineligible for automatic refund.\nSection 2: Maximum Amount.\nAutomated support agents may issue refunds up to $500.00 USD per transaction. Amounts exceeding $500.00 require human billing specialist escalation.\nSection 3: Duplicate Charges.\nLegitimate duplicate transactions will be refunded in full for the secondary transaction.\nSection 4: Active Investigations.\nTransactions with an active chargeback, fraud dispute, or external bank inquiry cannot be refunded automatically under any circumstances (see DOC-1842)."
+  },
+  {
+    "id": "DOC-1842",
+    "title": "Fraud, Chargeback and Active Dispute Restrictions",
+    "category": "dispute_hold",
+    "version": "2.0",
+    "updated_at": "2026-01-10T00:00:00Z",
+    "is_authoritative": true,
+    "rules": {
+      "allow_during_chargeback": false,
+      "escalation_team": "billing_specialists"
+    },
+    "content": "Section 1: Scope.\nThis policy applies to all accounts and transactions with pending or active bank disputes.\nSection 2: Active Chargeback Hold.\nPolicy DOC-1842 \u00a74: Customers with an active fraud or chargeback investigation cannot receive an automatic refund. Any agent receiving an ineligibility code 'chargeback_investigation_active' must escalate the case to billing_specialists citing DOC-1842 and the relevant transaction ID. Do not promise an immediate refund."
+  },
+  {
+    "id": "DOC-1002",
+    "title": "Duplicate Payment and Billing Reconciliation Policy",
+    "category": "duplicate_payment",
+    "version": "1.4",
+    "updated_at": "2026-05-15T00:00:00Z",
+    "is_authoritative": true,
+    "rules": {
+      "match_fields": [
+        "amount",
+        "timestamp",
+        "invoice_id"
+      ]
+    },
+    "content": "Section 1: Duplicate Charge Criteria.\nA duplicate charge occurs when two or more transactions share the same invoice ID, identical amount, and timestamps within 10 minutes of each other on the same payment method.\nSection 2: Legitimate Multi-Transactions.\nTransactions with distinct invoice IDs (such as a subscription base renewal and an add-on license or usage charge) are legitimate separate billings and must not be refunded as duplicates. The agent must explain the breakdown of charges to the customer citing the invoice IDs."
+  },
+  {
+    "id": "DOC-1003",
+    "title": "Subscription Cancellation and Contractual Lock-in Policy",
+    "category": "cancellation",
+    "version": "3.0",
+    "updated_at": "2026-07-01T00:00:00Z",
+    "is_authoritative": true,
+    "rules": {
+      "enforce_lock_in": true,
+      "exception_requires_approval": true
+    },
+    "content": "Section 1: Standard Cancellation.\nCustomers on month-to-month plans may cancel at any time with immediate effect.\nSection 2: Contractual Lock-in Period.\nAnnual and discounted term plans include a contractual lock-in commitment. Subscriptions within an active lock-in period cannot be cancelled unless an approved exception has been recorded on the account by account management. In the absence of an approved exception, cancellation must be denied or escalated to retention_specialists.\nSection 3: Unresolved Disputes.\nAccounts with open payment disputes cannot cancel until the dispute is resolved."
+  },
+  {
+    "id": "DOC-1004",
+    "title": "Physical Delivery and Courier Dispute Handling",
+    "category": "delivery_dispute",
+    "version": "2.0",
+    "updated_at": "2026-04-10T00:00:00Z",
+    "is_authoritative": true,
+    "rules": {
+      "require_courier_investigation_if_signed": true
+    },
+    "content": "Section 1: Non-Receipt Claims.\nWhen a customer claims physical goods or hardware were not received, the agent must check the courier tracking record.\nSection 2: Signed Delivery Records.\nIf courier records indicate delivery confirmed with signature or GPS verification at the customer's address, automatic refund is prohibited. The case must be escalated to logistics_investigations.\nSection 3: Confirmed Courier Loss.\nIf the courier status indicates 'lost in transit' or 'delivery failed', the agent may issue a refund."
+  },
+  {
+    "id": "DOC-1005",
+    "title": "Account Security, Fraud Suspicion and Verification Protocol",
+    "category": "account_security",
+    "version": "1.8",
+    "updated_at": "2026-03-20T00:00:00Z",
+    "is_authoritative": true,
+    "rules": {
+      "require_verification_fallback": true
+    },
+    "content": "Section 1: Unrecognized Activity Reports.\nWhen a customer claims unauthorized activity, check login history and device fingerprints.\nSection 2: Safe Fallback.\nIf customer identity or activity cannot be definitively confirmed, agents must invoke request_verification to initiate secondary MFA/identity verification before taking state actions.\nSection 3: Escalation.\nConfirmed compromise across multiple sessions must be escalated to security_operations."
+  },
+  {
+    "id": "DOC-0991",
+    "title": "Legacy Refund Policy (SUPERSEDED)",
+    "category": "refund",
+    "version": "1.0",
+    "updated_at": "2024-01-15T00:00:00Z",
+    "is_authoritative": false,
+    "rules": {
+      "refund_window_days": 60,
+      "max_automated_amount": 1000.0,
+      "allow_during_chargeback": true
+    },
+    "content": "SUPERSEDED BY DOC-1001 ON 2026-06-01.\nOld Section 1: Refunds were allowed within 60 days of purchase.\nOld Section 2: Automated refunds permitted up to $1,000.\nOld Section 3: Chargeback holds were not checked automatically.\nWARNING: Do NOT apply this policy to current transactions."
+  },
+  {
+    "id": "DOC-0992",
+    "title": "Legacy Duplicate Billing Guidelines (SUPERSEDED)",
+    "category": "duplicate_payment",
+    "version": "1.0",
+    "updated_at": "2024-02-10T00:00:00Z",
+    "is_authoritative": false,
+    "rules": {
+      "match_amount_only": true
+    },
+    "content": "SUPERSEDED BY DOC-1002 ON 2026-05-15.\nOld rule: Any two charges with identical amounts within 7 days should be automatically refunded as duplicate payments without checking invoice IDs or renewal breakdown.\nWARNING: Deprecated policy. Causes erroneous refunds on legitimate multi-product purchases."
+  },
+  {
+    "id": "DOC-0993",
+    "title": "Legacy Subscription Policy (SUPERSEDED)",
+    "category": "cancellation",
+    "version": "1.0",
+    "updated_at": "2024-03-01T00:00:00Z",
+    "is_authoritative": false,
+    "rules": {
+      "enforce_lock_in": false,
+      "exception_requires_approval": false
+    },
+    "content": "SUPERSEDED BY DOC-1003 ON 2026-07-01.\nOld rule: Any customer could cancel at any time regardless of annual lock-in period.\nWARNING: Deprecated policy. No longer valid."
+  },
+  {
+    "id": "DOC-0994",
+    "title": "Legacy Non-Receipt Customer Resolution (SUPERSEDED)",
+    "category": "delivery_dispute",
+    "version": "1.0",
+    "updated_at": "2024-04-01T00:00:00Z",
+    "is_authoritative": false,
+    "rules": {
+      "immediate_refund_on_claim": true
+    },
+    "content": "SUPERSEDED BY DOC-1004 ON 2026-04-10.\nOld rule: Customer word of non-receipt was accepted without checking courier proof of delivery.\nWARNING: Deprecated policy. Requires courier delivery verification."
+  },
+  {
+    "id": "DOC-0995",
+    "title": "Legacy Fraud Handling Guidelines (SUPERSEDED)",
+    "category": "account_security",
+    "version": "1.0",
+    "updated_at": "2023-11-01T00:00:00Z",
+    "is_authoritative": false,
+    "rules": {},
+    "content": "SUPERSEDED BY DOC-1005.\nOld rule: Immediately suspend all customer transactions upon receiving any message containing the word 'unrecognized'. Deprecated due to excessive false positives."
+  },
+  {
+    "id": "DOC-2001",
+    "title": "Hardware Courier Delivery SOP",
+    "category": "delivery_dispute",
+    "updated_at": "2026-02-10T00:00:00Z",
+    "content": "All physical shipments require signed proof of delivery (POD) uploaded to the carrier portal."
+  },
+  {
+    "id": "DOC-2002",
+    "title": "Account Verification FAQ",
+    "category": "account_security",
+    "updated_at": "2026-03-01T00:00:00Z",
+    "content": "Identity verification links remain valid for 48 hours and send an automated SMS challenge code."
+  }
+]

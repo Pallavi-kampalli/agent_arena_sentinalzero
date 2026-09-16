@@ -7,7 +7,7 @@ from agent_arena.config import get_config
 from agent_arena.models.setting import SettingsAuditLog
 from agent_arena.models.task import Task
 from agent_arena.services.settings_service import SettingsService
-from agent_arena.world.generator import generate_world
+from conftest import generate_world
 
 
 @pytest.fixture

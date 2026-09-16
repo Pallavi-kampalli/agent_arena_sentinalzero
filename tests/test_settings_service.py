@@ -52,7 +52,7 @@ async def test_update_setting_and_audit(db_session: AsyncSession):
     )
     latest_audit = result.scalars().first()
     assert latest_audit is not None
-    assert latest_audit.old_value == 200
+    assert latest_audit.old_value == 60
     assert latest_audit.new_value == 250
     assert latest_audit.changed_by == "lead_organizer"
 

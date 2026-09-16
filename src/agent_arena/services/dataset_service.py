@@ -1,5 +1,7 @@
-from collections import Counter
 from datetime import UTC, datetime
+import copy
+import json
+from pathlib import Path
 from typing import Any
 
 import sqlalchemy as sa
@@ -8,13 +10,101 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent_arena.logging import logger
 from agent_arena.models.task import Task
 from agent_arena.services.settings_service import SettingsService
-from agent_arena.tasks.generator import FAMILIES, VARIANTS, TaskGenerator
-from agent_arena.tasks.validator import validate_task
-from agent_arena.world.generator import generate_world
+
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+
+def merge_entities_by_key(
+    base: list[dict[str, Any]],
+    overrides: list[dict[str, Any]],
+    key: str,
+) -> list[dict[str, Any]]:
+    """Merges list of dict entities by primary key, with overrides replacing base items."""
+    merged = {item[key]: copy.deepcopy(item) for item in base if isinstance(item, dict) and key in item}
+    for item in overrides:
+        if isinstance(item, dict) and key in item:
+            merged[item[key]] = copy.deepcopy(item)
+    return list(merged.values())
+
+
+def load_canonical_tasks(data_dir: Path) -> list[dict[str, Any]]:
+    """Loads modular tasks, ground truth, and base entity catalogs from data_dir."""
+    tasks_file = data_dir / "tasks.json"
+    gt_file = data_dir / "ground_truth.json"
+
+    if not tasks_file.exists():
+        raise FileNotFoundError(f"tasks.json not found in {data_dir}")
+
+    with open(tasks_file, "r", encoding="utf-8") as f:
+        tasks = json.load(f)
+
+    gt_map = {}
+    if gt_file.exists():
+        with open(gt_file, "r", encoding="utf-8") as f:
+            gts = json.load(f)
+            gt_map = {g["task_id"]: g for g in gts}
+
+    def _read_json(fname: str) -> list[dict[str, Any]]:
+        p = data_dir / fname
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return []
+
+    customers = _read_json("customers.json")
+    transactions = _read_json("transactions.json")
+    subscriptions = _read_json("subscriptions.json")
+    policies = _read_json("policies.json")
+    previous_cases = _read_json("previous_cases.json")
+
+    compiled_tasks = []
+    for t in tasks:
+        tid = t["task_id"]
+        gt = gt_map.get(tid, {})
+        inp = t.get("input_payload", {})
+        overrides = t.get("task_overrides", {})
+
+        world = {
+            "seed": 50000,
+            "current_date": "2026-09-15T00:00:00+00:00",
+            "customers": copy.deepcopy(customers),
+            "transactions": copy.deepcopy(transactions),
+            "subscriptions": copy.deepcopy(subscriptions),
+            "policies": copy.deepcopy(policies),
+            "documents": copy.deepcopy(policies),
+            "historical_cases": copy.deepcopy(previous_cases),
+            "previous_cases": copy.deepcopy(previous_cases),
+            "verification_requests": [],
+            "escalations": [],
+            "target_customer_id": inp.get("customer_id", ""),
+        }
+
+        if "customers" in overrides:
+            world["customers"] = merge_entities_by_key(world["customers"], overrides["customers"], "id")
+        if "transactions" in overrides:
+            world["transactions"] = merge_entities_by_key(world["transactions"], overrides["transactions"], "id")
+        if "subscriptions" in overrides:
+            world["subscriptions"] = merge_entities_by_key(world["subscriptions"], overrides["subscriptions"], "id")
+        if "policies" in overrides:
+            world["policies"] = merge_entities_by_key(world["policies"], overrides["policies"], "id")
+            world["documents"] = merge_entities_by_key(world["documents"], overrides["policies"], "id")
+        if "previous_cases" in overrides:
+            world["previous_cases"] = merge_entities_by_key(world["previous_cases"], overrides["previous_cases"], "case_id")
+            world["historical_cases"] = merge_entities_by_key(world["historical_cases"], overrides["previous_cases"], "case_id")
+
+        compiled_tasks.append({
+            "task_id": tid,
+            "dataset": t.get("dataset", "hidden"),
+            "input_payload": inp,
+            "world_state_seed": world,
+            "ground_truth": gt,
+        })
+
+    return compiled_tasks
 
 
 class DatasetService:
-    """Orchestrates deterministic dataset generation, validation, and database loading."""
+    """Orchestrates loading of canonical static datasets into the database."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -27,94 +117,39 @@ class DatasetService:
         base_seed: int | None = None,
         replace_existing: bool = True,
     ) -> dict[str, Any]:
-        """Generates, validates, and inserts tasks into the PostgreSQL tasks table.
+        """Loads canonical pre-generated static tasks into the PostgreSQL tasks table.
 
-        Pulls task count from settings table if not explicitly passed (PRD §2.2, §8, §12).
-        Enforces complete 6x6 family x variant matrix coverage.
-        Disjoint seed spaces: dev (1000+) vs hidden (50000+).
+        Zero runtime seed generation: every team is evaluated on the exact same
+        canonical fixed tasks and world state.
         """
-        if dataset_type not in {"dev", "hidden"}:
-            raise ValueError(f"Invalid dataset_type '{dataset_type}'. Must be 'dev' or 'hidden'.")
+        if dataset_type != "hidden":
+            raise ValueError(
+                f"Live Agent Arena platform only supports the 'hidden' competition dataset (got '{dataset_type}'). "
+                f"Development tasks are isolated to the mock simulator."
+            )
 
-        # 1. Pull target count from settings service (never hardcoded)
+        raw_tasks = load_canonical_tasks(DATA_DIR)
+        if not raw_tasks:
+            raise FileNotFoundError(f"No task files found in {DATA_DIR}")
+
+        # Pull target count from settings service if not passed
         if count is None:
-            setting_key = "dev_task_count" if dataset_type == "dev" else "hidden_task_count"
+            setting_key = "hidden_task_count"
             count = await self.settings_service.get(setting_key)
             if count is None:
-                count = 70 if dataset_type == "dev" else 200
+                count = len(raw_tasks)
 
-        # Disjoint seed spaces: dev uses 1000+, hidden uses 50000+
-        seed = base_seed if base_seed is not None else (1000 if dataset_type == "dev" else 50000)
+        tasks_to_load = raw_tasks[:count] if count is not None else raw_tasks
 
-        logger.info(f"Generating {count} tasks for '{dataset_type}' dataset using seed {seed}")
-
-        # 2. Generate baseline world
-        world = generate_world(seed=seed)
-
-        generator = TaskGenerator(seed=seed)
-        generated_tasks: list[dict[str, Any]] = []
-        rejected_count = 0
-        family_counter: Counter = Counter()
-        variant_counter: Counter = Counter()
-        matrix: dict[str, dict[str, int]] = {fam: {var: 0 for var in VARIANTS} for fam in FAMILIES}
-
-        # 3. Round-robin generation across families and variants
-        idx = 0
-        attempt = 0
-        max_attempts = count * 3
-
-        while len(generated_tasks) < count and attempt < max_attempts:
-            attempt += 1
-            family = FAMILIES[idx % len(FAMILIES)]
-            variant = VARIANTS[(idx // len(FAMILIES)) % len(VARIANTS)]
-            task_num = len(generated_tasks) + 1
-            task_id = f"TASK-{dataset_type.upper()}-{task_num:04d}"
-
-            task = generator.generate_task(
-                base_world=world,
-                family=family,
-                variant=variant,
-                task_id=task_id,
-                dataset=dataset_type,
-            )
-
-            # Mandatory validation (PRD §8)
-            is_valid, error = validate_task(task)
-            if not is_valid:
-                logger.warning(f"Task {task_id} rejected by validator: {error}")
-                rejected_count += 1
-                idx += 1
-                continue
-
-            generated_tasks.append(task)
-            family_counter[family] += 1
-            variant_counter[variant] += 1
-            matrix[family][variant] += 1
-            idx += 1
-
-        if len(generated_tasks) < count:
-            raise RuntimeError(
-                f"Failed to generate {count} validated tasks. Generated {len(generated_tasks)}, rejected {rejected_count}."
-            )
-
-        # Enforce complete 6x6 matrix coverage if count >= 36
-        if count >= len(FAMILIES) * len(VARIANTS):
-            for fam in FAMILIES:
-                for var in VARIANTS:
-                    if matrix[fam][var] == 0:
-                        raise RuntimeError(f"6x6 matrix coverage failure: cell ({fam}, {var}) has 0 generated tasks.")
-
-        # 4. Load into PostgreSQL tasks table
+        # Load into PostgreSQL tasks table
         now = datetime.now(UTC)
         loaded_count = 0
 
         if replace_existing:
-            # Clean re-generation: delete previous tasks for this dataset
             await self.session.execute(sa.delete(Task).where(Task.dataset == dataset_type))
         else:
-            # Check for existing duplicate task_ids to reject cleanly and rollback
             existing_ids = await self.session.execute(
-                sa.select(Task.task_id).where(Task.task_id.in_([t["task_id"] for t in generated_tasks]))
+                sa.select(Task.task_id).where(Task.task_id.in_([t["task_id"] for t in tasks_to_load]))
             )
             existing = existing_ids.scalars().all()
             if existing:
@@ -125,12 +160,12 @@ class DatasetService:
                 )
 
         try:
-            for t in generated_tasks:
+            for t in tasks_to_load:
                 task_model = Task(
                     task_id=t["task_id"],
-                    dataset=t["dataset"],
-                    family=t["family"],
-                    variant=t["variant"],
+                    dataset=t.get("dataset", dataset_type),
+                    family=None,
+                    variant=None,
                     input_payload=t["input_payload"],
                     world_state_seed=t["world_state_seed"],
                     ground_truth=t["ground_truth"],
@@ -145,22 +180,18 @@ class DatasetService:
             raise
 
         logger.info(
-            f"Successfully loaded {loaded_count} validated tasks for '{dataset_type}' dataset.",
+            f"Successfully loaded {loaded_count} canonical static tasks for '{dataset_type}' dataset.",
             extra={
                 "dataset": dataset_type,
                 "loaded": loaded_count,
-                "rejected": rejected_count,
             },
         )
 
         return {
             "dataset": dataset_type,
             "target_count": count,
-            "generated_count": len(generated_tasks),
-            "validated_count": len(generated_tasks),
-            "rejected_count": rejected_count,
+            "generated_count": len(tasks_to_load),
+            "validated_count": len(tasks_to_load),
+            "rejected_count": 0,
             "loaded_count": loaded_count,
-            "family_distribution": dict(family_counter),
-            "variant_distribution": dict(variant_counter),
-            "matrix": matrix,
         }

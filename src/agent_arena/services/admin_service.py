@@ -798,7 +798,7 @@ class AdminService:
         ).scalar_one() or 0
 
         # Required capacity per team
-        hidden_task_budget = await self.settings_service.get("hidden_task_count", 200)
+        hidden_task_budget = await self.settings_service.get("hidden_task_count", 60)
         task_capacity = int(hidden_task_budget)
 
         # Warning condition: hidden tasks available is fewer than needed for active teams

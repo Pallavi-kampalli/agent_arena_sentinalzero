@@ -13,11 +13,12 @@ from typing import Any, Literal
 
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, status
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 # Database and configuration
 MOCK_DIR = Path(__file__).resolve().parent
-DEV_TASKS_PATH = MOCK_DIR / "dev_tasks.json"
+DATA_DIR = MOCK_DIR / "data"
 DB_PATH = os.getenv("MOCK_DATABASE_PATH", str(MOCK_DIR / "mock_arena.db"))
 REVEAL_GROUND_TRUTH = os.getenv("REVEAL_GROUND_TRUTH", "true").lower() in ("1", "true", "yes")
 
@@ -526,8 +527,92 @@ class SubmissionFinalizeResponse(BaseModel):
 # =============================================================================
 
 
+def merge_entities_by_key(base_list: list[dict], override_list: list[dict], key: str = "id") -> list[dict]:
+    res = copy.deepcopy(base_list)
+    lookup = {item[key]: i for i, item in enumerate(res) if key in item}
+    for item in override_list:
+        if key in item and item[key] in lookup:
+            res[lookup[item[key]]] = copy.deepcopy(item)
+        else:
+            res.append(copy.deepcopy(item))
+            if key in item:
+                lookup[item[key]] = len(res) - 1
+    return res
+
+
+def load_tasks_from_data_dir(data_dir: Path) -> list[dict]:
+    tasks_file = data_dir / "tasks.json"
+    gt_file = data_dir / "ground_truth.json"
+    if not tasks_file.exists() or not gt_file.exists():
+        return []
+
+    with open(tasks_file, "r", encoding="utf-8") as f:
+        tasks = json.load(f)
+    with open(gt_file, "r", encoding="utf-8") as f:
+        gts = json.load(f)
+    gt_map = {g["task_id"]: g for g in gts}
+
+    def _read_json(fname: str) -> list[dict]:
+        p = data_dir / fname
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return []
+
+    customers = _read_json("customers.json")
+    transactions = _read_json("transactions.json")
+    subscriptions = _read_json("subscriptions.json")
+    policies = _read_json("policies.json")
+    previous_cases = _read_json("previous_cases.json")
+
+    compiled_tasks = []
+    for t in tasks:
+        tid = t["task_id"]
+        gt = gt_map.get(tid, {})
+        inp = t.get("input_payload", {})
+        overrides = t.get("task_overrides", {})
+
+        world = {
+            "seed": 1000,
+            "current_date": "2026-09-15T00:00:00+00:00",
+            "customers": copy.deepcopy(customers),
+            "transactions": copy.deepcopy(transactions),
+            "subscriptions": copy.deepcopy(subscriptions),
+            "policies": copy.deepcopy(policies),
+            "documents": copy.deepcopy(policies),
+            "historical_cases": copy.deepcopy(previous_cases),
+            "previous_cases": copy.deepcopy(previous_cases),
+            "verification_requests": [],
+            "escalations": [],
+            "target_customer_id": inp.get("customer_id", ""),
+        }
+
+        if "customers" in overrides:
+            world["customers"] = merge_entities_by_key(world["customers"], overrides["customers"], "id")
+        if "transactions" in overrides:
+            world["transactions"] = merge_entities_by_key(world["transactions"], overrides["transactions"], "id")
+        if "subscriptions" in overrides:
+            world["subscriptions"] = merge_entities_by_key(world["subscriptions"], overrides["subscriptions"], "id")
+        if "policies" in overrides:
+            world["policies"] = merge_entities_by_key(world["policies"], overrides["policies"], "id")
+            world["documents"] = merge_entities_by_key(world["documents"], overrides["policies"], "id")
+        if "previous_cases" in overrides:
+            world["previous_cases"] = merge_entities_by_key(world["previous_cases"], overrides["previous_cases"], "case_id")
+            world["historical_cases"] = merge_entities_by_key(world["historical_cases"], overrides["previous_cases"], "case_id")
+
+        compiled_tasks.append({
+            "task_id": tid,
+            "dataset": t.get("dataset", "dev"),
+            "input_payload": inp,
+            "world_state_seed": world,
+            "ground_truth": gt,
+        })
+
+    return compiled_tasks
+
+
 def init_db(conn: sqlite3.Connection | None = None) -> None:
-    """Initializes SQLite tables and loads public dev tasks from dev_tasks.json."""
+    """Initializes SQLite tables and loads tasks from DATA_DIR."""
     close_when_done = False
     if conn is None:
         conn = sqlite3.connect(DB_PATH)
@@ -538,8 +623,7 @@ def init_db(conn: sqlite3.Connection | None = None) -> None:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS mock_tasks (
                     task_id TEXT PRIMARY KEY,
-                    family TEXT NOT NULL,
-                    variant TEXT NOT NULL,
+                    dataset TEXT DEFAULT 'dev',
                     input_payload TEXT NOT NULL,
                     world_state_seed TEXT NOT NULL,
                     ground_truth_privileged TEXT NOT NULL,
@@ -581,29 +665,49 @@ def init_db(conn: sqlite3.Connection | None = None) -> None:
                     per_task_results TEXT NOT NULL
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS mock_task_evaluations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    task_id TEXT NOT NULL,
+                    customer_id TEXT,
+                    customer_message TEXT,
+                    correct INTEGER NOT NULL,
+                    actual_resolution TEXT,
+                    expected_resolution TEXT,
+                    actual_escalation INTEGER,
+                    expected_escalation INTEGER,
+                    actual_evidence TEXT,
+                    expected_evidence TEXT,
+                    missing_evidence TEXT,
+                    diff_explanation TEXT,
+                    tool_calls TEXT,
+                    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM mock_tasks")
             count = cursor.fetchone()[0]
-            if count == 0 and DEV_TASKS_PATH.exists():
-                with open(DEV_TASKS_PATH, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    tasks = data.get("tasks", [])
-                    for t in tasks:
-                        conn.execute(
-                            """
-                            INSERT OR REPLACE INTO mock_tasks (task_id, family, variant, input_payload, world_state_seed, ground_truth_privileged)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                t["task_id"],
-                                t["family"],
-                                t["variant"],
-                                json.dumps(t["input_payload"]),
-                                json.dumps(t["world_state_seed"]),
-                                json.dumps(t["ground_truth"]),
-                            ),
-                        )
+            if count == 0:
+                tasks = []
+                if DATA_DIR.exists():
+                    tasks = load_tasks_from_data_dir(DATA_DIR)
+
+                for t in tasks:
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO mock_tasks (task_id, dataset, input_payload, world_state_seed, ground_truth_privileged)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            t["task_id"],
+                            t.get("dataset", "dev"),
+                            json.dumps(t["input_payload"]),
+                            json.dumps(t["world_state_seed"]),
+                            json.dumps(t["ground_truth"]),
+                        ),
+                    )
     finally:
         if close_when_done:
             conn.close()
@@ -1025,20 +1129,600 @@ def health() -> dict[str, Any]:
 
 @app.post("/dev/reset")
 def dev_reset(authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    """Simulator-only endpoint to reset active assignments and tool logs for the caller session."""
+    """Simulator-only endpoint to reset active assignments, evaluations, and tool logs."""
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
         with conn:
-            conn.execute("DELETE FROM mock_task_assignments WHERE session_id = ?", (session_id,))
-            conn.execute("DELETE FROM mock_tool_call_logs WHERE session_id = ?", (session_id,))
-            conn.execute("DELETE FROM mock_submissions WHERE session_id = ?", (session_id,))
+            if not authorization:
+                conn.execute("DELETE FROM mock_task_assignments")
+                conn.execute("DELETE FROM mock_tool_call_logs")
+                conn.execute("DELETE FROM mock_submissions")
+                conn.execute("DELETE FROM mock_task_evaluations")
+            else:
+                conn.execute("DELETE FROM mock_task_assignments WHERE session_id = ?", (session_id,))
+                conn.execute("DELETE FROM mock_tool_call_logs WHERE session_id = ?", (session_id,))
+                conn.execute("DELETE FROM mock_submissions WHERE session_id = ?", (session_id,))
+                conn.execute("DELETE FROM mock_task_evaluations WHERE session_id = ?", (session_id,))
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM mock_tasks")
             count = cursor.fetchone()[0]
         return {"reset": True, "tasks_available": count}
     finally:
         conn.close()
+
+
+# =============================================================================
+# Mock Arena Debug Dashboard Endpoints
+# =============================================================================
+
+
+def get_dashboard_data(conn: sqlite3.Connection) -> dict[str, Any]:
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, session_id, task_id, customer_id, customer_message,
+               correct, actual_resolution, expected_resolution, actual_escalation,
+               expected_escalation, actual_evidence, expected_evidence, missing_evidence,
+               diff_explanation, tool_calls, submitted_at
+        FROM mock_task_evaluations
+        ORDER BY id DESC
+    """)
+    rows = cursor.fetchall()
+    evaluations = []
+    for r in rows:
+        evaluations.append({
+            "id": r["id"],
+            "session_id": r["session_id"],
+            "task_id": r["task_id"],
+            "customer_id": r["customer_id"] or "",
+            "customer_message": r["customer_message"] or "",
+            "correct": bool(r["correct"]),
+            "actual_resolution": r["actual_resolution"] or "",
+            "expected_resolution": r["expected_resolution"] or "",
+            "actual_escalation": bool(r["actual_escalation"]),
+            "expected_escalation": bool(r["expected_escalation"]),
+            "actual_evidence": json.loads(r["actual_evidence"]) if r["actual_evidence"] else [],
+            "expected_evidence": json.loads(r["expected_evidence"]) if r["expected_evidence"] else [],
+            "missing_evidence": json.loads(r["missing_evidence"]) if r["missing_evidence"] else [],
+            "diff_explanation": r["diff_explanation"] or "",
+            "tool_calls": json.loads(r["tool_calls"]) if r["tool_calls"] else [],
+            "submitted_at": r["submitted_at"],
+        })
+
+    cursor.execute("SELECT COUNT(*) FROM mock_tool_call_logs")
+    total_tool_calls = cursor.fetchone()[0]
+
+    total = len(evaluations)
+    passed = sum(1 for e in evaluations if e["correct"])
+    failed = total - passed
+    accuracy = round((passed / total * 100), 1) if total > 0 else 0.0
+
+    return {
+        "summary": {
+            "total_evaluated": total,
+            "passed": passed,
+            "failed": failed,
+            "accuracy_percent": accuracy,
+            "total_tool_calls": total_tool_calls,
+        },
+        "failed_tasks": [e for e in evaluations if not e["correct"]],
+        "passed_tasks": [e for e in evaluations if e["correct"]],
+        "all_evaluations": evaluations,
+    }
+
+
+def render_dashboard_html(data: dict[str, Any]) -> str:
+    summary = data["summary"]
+    failed_tasks = data["failed_tasks"]
+    passed_tasks = data["passed_tasks"]
+
+    total = summary["total_evaluated"]
+    passed = summary["passed"]
+    failed = summary["failed"]
+    accuracy = summary["accuracy_percent"]
+    tool_calls_count = summary["total_tool_calls"]
+
+    failed_html = ""
+    if not failed_tasks:
+        failed_html = """
+        <div class="card-empty">
+            <p>✨ <strong>No failed tasks!</strong> Either your agent passed all evaluated tasks, or no tasks have been run yet.</p>
+            <p style="margin-top: 8px; font-size: 13px; color: #8b949e;">Run <code>python main.py</code> in your participant workspace to process tasks.</p>
+        </div>
+        """
+    else:
+        for f in failed_tasks:
+            # Format tool pills
+            tools_pills = ""
+            for tc in f.get("tool_calls", []):
+                tname = tc.get("tool_name", "unknown")
+                lat = tc.get("latency_ms", 0)
+                is_rej = tc.get("was_enforcement_rejection", 0) == 1
+                badge_cls = "tool-pill rejection" if is_rej else "tool-pill"
+                rej_label = " [REJECTED]" if is_rej else ""
+                tools_pills += f'<span class="{badge_cls}">{tname}{rej_label} ({lat}ms)</span> '
+            if not tools_pills:
+                tools_pills = '<span style="color: #8b949e; font-size: 12px;">(No tools called)</span>'
+
+            # Resolution comparison
+            res_match = f["actual_resolution"] == f["expected_resolution"]
+            res_status = '<span class="match">✓ Matched</span>' if res_match else '<span class="mismatch">✗ Mismatch</span>'
+
+            # Escalation comparison
+            esc_match = f["actual_escalation"] == f["expected_escalation"]
+            esc_status = '<span class="match">✓ Matched</span>' if esc_match else '<span class="mismatch">✗ Mismatch</span>'
+
+            # Evidence comparison
+            missing_ev = f.get("missing_evidence", [])
+            ev_status = '<span class="match">✓ Complete</span>' if not missing_ev else f'<span class="mismatch">✗ Missing: {", ".join(missing_ev)}</span>'
+
+            submitted_display = f.get("submitted_at", "").replace("T", " ")[:19]
+
+            failed_html += f"""
+            <div class="fail-card">
+                <div class="fail-header">
+                    <div>
+                        <span class="badge badge-fail">[FAIL]</span>
+                        <span class="task-tag">{f["task_id"]}</span>
+                        <span class="meta-tag">• Customer: {f["customer_id"]}</span>
+                    </div>
+                    <div class="meta-tag">Submitted: {submitted_display} UTC</div>
+                </div>
+                
+                <div class="diff-alert">
+                    <strong>Diff Explanation:</strong> {f["diff_explanation"]}
+                </div>
+
+                <div class="inquiry-box">
+                    <strong>Customer ({f["customer_id"]}):</strong> "{f["customer_message"]}"
+                </div>
+
+                <table class="diff-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">Field</th>
+                            <th style="width: 30%;">Expected (Ground Truth)</th>
+                            <th style="width: 30%;">Agent Output</th>
+                            <th style="width: 15%;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Decision Resolution</td>
+                            <td><code>{f["expected_resolution"]}</code></td>
+                            <td><code>{f["actual_resolution"]}</code></td>
+                            <td>{res_status}</td>
+                        </tr>
+                        <tr>
+                            <td>Escalation Required</td>
+                            <td><code>{f["expected_escalation"]}</code></td>
+                            <td><code>{f["actual_escalation"]}</code></td>
+                            <td>{esc_status}</td>
+                        </tr>
+                        <tr>
+                            <td>Evidence Citations</td>
+                            <td><code>{", ".join(f.get("expected_evidence", [])) or "[]"}</code></td>
+                            <td><code>{", ".join(f.get("actual_evidence", [])) or "[]"}</code></td>
+                            <td>{ev_status}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="tools-trace">
+                    <span class="trace-label">Tools Executed:</span>
+                    {tools_pills}
+                </div>
+            </div>
+            """
+
+    # Passed tasks rows & cards
+    passed_rows = ""
+    passed_cards = ""
+    for p in passed_tasks:
+        sub_time = p.get("submitted_at", "").replace("T", " ")[:19]
+        ev_count = len(p.get("actual_evidence", []))
+        tool_count = len(p.get("tool_calls", []))
+        passed_rows += f"""
+        <tr>
+            <td><span class="badge badge-pass">[PASS]</span> <code>{p["task_id"]}</code></td>
+            <td><code>{p["customer_id"]}</code></td>
+            <td><code>{p["actual_resolution"]}</code></td>
+            <td>{ev_count} item(s)</td>
+            <td>{tool_count} call(s)</td>
+            <td style="color: #8b949e;">{sub_time}</td>
+        </tr>
+        """
+
+        tools_pills = ""
+        for tc in p.get("tool_calls", []):
+            tname = tc.get("tool_name", "unknown")
+            lat = tc.get("latency_ms", 0)
+            is_rej = tc.get("was_enforcement_rejection", 0) == 1
+            badge_cls = "tool-pill rejection" if is_rej else "tool-pill"
+            rej_label = " [REJECTED]" if is_rej else ""
+            tools_pills += f'<span class="{badge_cls}">{tname}{rej_label} ({lat}ms)</span> '
+        if not tools_pills:
+            tools_pills = '<span style="color: #8b949e; font-size: 12px;">(No tools called)</span>'
+
+        passed_cards += f"""
+        <div class="pass-card">
+            <div class="pass-header">
+                <div>
+                    <span class="badge badge-pass">[PASS]</span>
+                    <span class="task-tag">{p["task_id"]}</span>
+                    <span class="meta-tag">• Customer: {p["customer_id"]}</span>
+                </div>
+                <div class="meta-tag">Submitted: {sub_time} UTC</div>
+            </div>
+
+            <div class="inquiry-box">
+                <strong>Customer ({p["customer_id"]}):</strong> "{p["customer_message"]}"
+            </div>
+
+            <table class="diff-table">
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">Field</th>
+                        <th style="width: 35%;">Ground Truth</th>
+                        <th style="width: 35%;">Agent Output</th>
+                        <th style="width: 15%;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Resolution</td>
+                        <td><code>{p["expected_resolution"]}</code></td>
+                        <td><code>{p["actual_resolution"]}</code></td>
+                        <td><span class="match">✓ Matched</span></td>
+                    </tr>
+                    <tr>
+                        <td>Escalation Required</td>
+                        <td><code>{p["expected_escalation"]}</code></td>
+                        <td><code>{p["actual_escalation"]}</code></td>
+                        <td><span class="match">✓ Matched</span></td>
+                    </tr>
+                    <tr>
+                        <td>Evidence Citations</td>
+                        <td><code>{", ".join(p.get("expected_evidence", [])) or "[]"}</code></td>
+                        <td><code>{", ".join(p.get("actual_evidence", [])) or "[]"}</code></td>
+                        <td><span class="match">✓ Complete</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="tools-trace">
+                <span class="trace-label">Tools Executed:</span>
+                {tools_pills}
+            </div>
+        </div>
+        """
+
+    if not passed_rows:
+        passed_rows = '<tr><td colspan="7" style="text-align: center; color: #8b949e; padding: 16px;">No passed tasks recorded yet.</td></tr>'
+    if not passed_cards:
+        passed_cards = '<div class="card-empty"><p>No passed tasks recorded yet.</p></div>'
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Arena SupportOps — Mock Debugger</title>
+<style>
+  :root {{
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-hover: #1c2128;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --pass: #3fb950;
+    --pass-bg: rgba(63, 185, 80, 0.15);
+    --fail: #f85149;
+    --fail-bg: rgba(248, 81, 73, 0.15);
+  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 24px;
+    line-height: 1.5;
+  }}
+  .container {{ max-width: 1200px; margin: 0 auto; }}
+  .header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }}
+  .title-group h1 {{ font-size: 22px; font-weight: 600; color: #f0f6fc; display: flex; align-items: center; gap: 8px; }}
+  .title-group p {{ font-size: 13px; color: var(--text-muted); margin-top: 4px; }}
+  .badge {{
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }}
+  .badge-online {{ background: var(--pass-bg); color: var(--pass); border-color: rgba(63, 185, 80, 0.3); }}
+  .badge-fail {{ background: var(--fail-bg); color: var(--fail); border-color: rgba(248, 81, 73, 0.3); }}
+  .badge-pass {{ background: var(--pass-bg); color: var(--pass); border-color: rgba(63, 185, 80, 0.3); }}
+  .controls {{ display: flex; align-items: center; gap: 10px; }}
+  button {{
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+  }}
+  button:hover {{ background: var(--surface-hover); border-color: #8b949e; }}
+  .btn-danger {{ color: #f85149; border-color: rgba(248, 81, 73, 0.4); }}
+  .btn-danger:hover {{ background: var(--fail-bg); }}
+  
+  .stats-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }}
+  .stat-card {{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }}
+  .stat-card .label {{ font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }}
+  .stat-card .value {{ font-size: 26px; font-weight: 700; color: #f0f6fc; margin-top: 4px; }}
+  
+  .section-title {{ font-size: 17px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; color: #f0f6fc; }}
+  
+  .card-empty {{
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 24px;
+  }}
+
+  .fail-card {{
+    background: var(--surface);
+    border: 1px solid rgba(248, 81, 73, 0.35);
+    border-left: 4px solid var(--fail);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }}
+  .fail-header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }}
+  .pass-card {{
+    background: var(--surface);
+    border: 1px solid rgba(63, 185, 80, 0.35);
+    border-left: 4px solid var(--pass);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }}
+  .pass-header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }}
+  .task-tag {{ font-family: monospace; font-size: 14px; font-weight: 600; color: #f0f6fc; margin-left: 4px; }}
+  .meta-tag {{ font-size: 12px; color: var(--text-muted); }}
+  
+  .diff-alert {{
+    background: var(--fail-bg);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    border-radius: 6px;
+    padding: 10px 14px;
+    color: #ff7b72;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }}
+
+  .inquiry-box {{
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #8b949e;
+    margin-bottom: 12px;
+  }}
+  .inquiry-box strong {{ color: var(--text); }}
+
+  .diff-table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-bottom: 12px;
+  }}
+  .diff-table th, .diff-table td {{
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    text-align: left;
+  }}
+  .diff-table th {{ background: #161b22; color: var(--text-muted); font-weight: 500; }}
+  .mismatch {{ color: #f85149; font-weight: 600; }}
+  .match {{ color: #3fb950; font-weight: 600; }}
+
+  .tools-trace {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-top: 10px;
+  }}
+  .trace-label {{ font-size: 12px; color: var(--text-muted); font-weight: 500; }}
+  .tool-pill {{
+    font-family: monospace;
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: #21262d;
+    border: 1px solid var(--border);
+    color: var(--accent);
+  }}
+  .tool-pill.rejection {{ background: var(--fail-bg); color: #f85149; border-color: rgba(248, 81, 73, 0.4); }}
+
+  details {{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-top: 24px;
+  }}
+  details summary {{
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text);
+  }}
+  .pass-table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 12px;
+  }}
+  .pass-table th, .pass-table td {{
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }}
+  .pass-table th {{ color: var(--text-muted); font-weight: 500; }}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title-group">
+      <h1>🛠️ Mock Simulator — Agent Debugger</h1>
+      <p>Local Ground Truth Verification & Evaluation Debugger • No Auth Token Required</p>
+    </div>
+    <div class="controls">
+      <span class="badge badge-online">🟢 Online (Practice Mode)</span>
+      <button id="toggle-auto">⚡ Auto-Refresh: ON</button>
+      <button onclick="location.reload()">🔄 Refresh</button>
+      <button class="btn-danger" onclick="resetHistory()">🗑️ Reset History</button>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">Evaluations Attempted</div>
+      <div class="value">{total} / 30</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Tasks Passed</div>
+      <div class="value" style="color: var(--pass);">{passed}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Tasks Failed</div>
+      <div class="value" style="color: var(--fail);">{failed}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Score Report</div>
+      <div class="value" style="font-size: 22px;">{passed}/{total} ({accuracy}%)</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Tool Calls</div>
+      <div class="value">{tool_calls_count}</div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    <span>🚨 Failed Tasks ({failed}) — Debug Trace & Ground Truth Mismatches</span>
+  </div>
+
+  {failed_html}
+
+  <details open style="margin-top: 24px;">
+    <summary style="font-size: 16px; font-weight: 600; cursor: pointer; color: var(--text);">
+      ✅ Passed Tasks ({passed}) — Inspect Successful Resolutions & Traces
+    </summary>
+    <div style="margin-top: 14px;">
+      {passed_cards}
+    </div>
+  </details>
+</div>
+
+<script>
+  let autoRefresh = localStorage.getItem('mock_auto_refresh') !== 'false';
+  const toggleBtn = document.getElementById('toggle-auto');
+  function updateToggle() {{
+    toggleBtn.textContent = autoRefresh ? '⚡ Auto-Refresh: ON' : '⏸️ Auto-Refresh: OFF';
+    toggleBtn.style.color = autoRefresh ? '#3fb950' : '#8b949e';
+  }}
+  toggleBtn.onclick = () => {{
+    autoRefresh = !autoRefresh;
+    localStorage.setItem('mock_auto_refresh', autoRefresh);
+    updateToggle();
+  }};
+  updateToggle();
+  setInterval(() => {{
+    if (autoRefresh) location.reload();
+  }}, 3000);
+
+  function resetHistory() {{
+    if (confirm("Reset all task evaluations and tool call history in the mock simulator?")) {{
+      fetch("/dev/reset", {{method: "POST"}}).then(() => location.reload());
+    }}
+  }}
+</script>
+</body>
+</html>
+"""
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def get_dashboard() -> HTMLResponse:
+    """Exposes the standalone visual debug dashboard for evaluating local agent performance."""
+    conn = get_db_connection()
+    try:
+        data = get_dashboard_data(conn)
+        html_content = render_dashboard_html(data)
+        return HTMLResponse(content=html_content)
+    finally:
+        conn.close()
+
+
+@app.get("/api/dashboard")
+def get_dashboard_api() -> dict[str, Any]:
+    """Programmatic JSON endpoint returning evaluation breakdown and failed tasks."""
+    conn = get_db_connection()
+    try:
+        return get_dashboard_data(conn)
+    finally:
+        conn.close()
+
+
+@app.get("/", response_class=RedirectResponse)
+def root_redirect() -> RedirectResponse:
+    """Redirects simulator root traffic to the visual debug dashboard."""
+    return RedirectResponse(url="/dashboard")
 
 
 # --- Tool Endpoints ---
@@ -1261,29 +1945,44 @@ def start_task(authorization: str | None = Header(default=None)) -> TaskStartRes
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        # Find next task not yet assigned to this session
+        # Check if there is an active submission in progress
         cursor.execute(
-            """
-            SELECT t.task_id, t.input_payload, t.world_state_seed
-            FROM mock_tasks t
-            WHERE t.task_id NOT IN (
-                SELECT task_id FROM mock_task_assignments WHERE session_id = ?
-            )
-            ORDER BY t.task_id ASC LIMIT 1
-            """,
+            "SELECT submission_id FROM mock_submissions WHERE session_id = ? AND status = 'in_progress' ORDER BY started_at DESC LIMIT 1",
             (session_id,),
         )
+        sub_row = cursor.fetchone()
+        active_sub_id = sub_row["submission_id"] if sub_row else None
+
+        # Find next task not yet assigned to this submission (or session)
+        if active_sub_id:
+            cursor.execute(
+                """
+                SELECT t.task_id, t.input_payload, t.world_state_seed
+                FROM mock_tasks t
+                WHERE t.task_id NOT IN (
+                    SELECT task_id FROM mock_task_assignments WHERE submission_id = ?
+                )
+                ORDER BY t.task_id ASC LIMIT 1
+                """,
+                (active_sub_id,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT t.task_id, t.input_payload, t.world_state_seed
+                FROM mock_tasks t
+                WHERE t.task_id NOT IN (
+                    SELECT task_id FROM mock_task_assignments WHERE session_id = ? AND submission_id IS NULL
+                )
+                ORDER BY t.task_id ASC LIMIT 1
+                """,
+                (session_id,),
+            )
         row = cursor.fetchone()
         if not row:
-            # If all assigned, pick the earliest or reset loop
-            cursor.execute(
-                "SELECT task_id, input_payload, world_state_seed FROM mock_tasks ORDER BY task_id ASC LIMIT 1"
-            )
-            row = cursor.fetchone()
-
-        if not row:
             raise HTTPException(
-                status_code=500, detail={"error": "NO_TASKS", "message": "No tasks available in simulator."}
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": "NO_MORE_TASKS", "message": "All tasks have been assigned. Finalize submission or call /dev/reset."},
             )
 
         task_id = row["task_id"]
@@ -1298,7 +1997,7 @@ def start_task(authorization: str | None = Header(default=None)) -> TaskStartRes
                 INSERT INTO mock_task_assignments (session_id, task_id, submission_id, assigned_at, world_runtime_state)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (session_id, task_id, None, now_iso, json.dumps(world_seed)),
+                (session_id, task_id, active_sub_id, now_iso, json.dumps(world_seed)),
             )
 
         return TaskStartResponse(
@@ -1363,6 +2062,67 @@ def submit_task(
         if correct:
             diff_parts.append("Decision, escalation flag, and required evidence match ground truth.")
 
+        diff_str = " ".join(diff_parts)
+
+        # Record evaluation in mock_task_evaluations
+        cursor.execute("SELECT input_payload FROM mock_tasks WHERE task_id = ?", (req.task_id,))
+        task_meta = cursor.fetchone()
+        input_data = json.loads(task_meta["input_payload"]) if task_meta else {}
+        customer_id = input_data.get("customer_id", "")
+        customer_message = input_data.get("customer_message", "")
+
+        cursor.execute(
+            """
+            SELECT tool_name, was_enforcement_rejection, latency_ms
+            FROM mock_tool_call_logs
+            WHERE session_id = ? AND task_id = ?
+            ORDER BY id ASC
+            """,
+            (session_id, req.task_id),
+        )
+        tool_logs = [dict(r) for r in cursor.fetchall()]
+
+        now_iso = datetime.now(UTC).isoformat()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO mock_task_evaluations
+                (session_id, task_id, customer_id, customer_message,
+                 correct, actual_resolution, expected_resolution, actual_escalation,
+                 expected_escalation, actual_evidence, expected_evidence, missing_evidence,
+                 diff_explanation, tool_calls, submitted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session_id,
+                    req.task_id,
+                    customer_id,
+                    customer_message,
+                    1 if correct else 0,
+                    req.decision.resolution,
+                    exp_res,
+                    1 if req.decision.escalation_required else 0,
+                    1 if must_esc else 0,
+                    json.dumps(req.evidence),
+                    json.dumps(req_ev),
+                    json.dumps(missing_evidence),
+                    diff_str,
+                    json.dumps(tool_logs),
+                    now_iso,
+                ),
+            )
+            # Update active submission per_task_results if part of a submission
+            if submission_id:
+                cursor.execute("SELECT per_task_results FROM mock_submissions WHERE submission_id = ?", (submission_id,))
+                sub_row = cursor.fetchone()
+                if sub_row:
+                    current_results = json.loads(sub_row["per_task_results"]) if sub_row["per_task_results"] else []
+                    current_results.append({"task_id": req.task_id, "correct": correct})
+                    conn.execute(
+                        "UPDATE mock_submissions SET per_task_results = ? WHERE submission_id = ?",
+                        (json.dumps(current_results), submission_id),
+                    )
+
         return TaskSubmitPracticeResponse(
             received=True,
             task_id=req.task_id,
@@ -1370,7 +2130,7 @@ def submit_task(
             expected_resolution=exp_res,
             expected_evidence=req_ev,
             your_evidence=req.evidence,
-            diff_explanation=" ".join(diff_parts),
+            diff_explanation=diff_str,
         )
     finally:
         conn.close()
@@ -1385,6 +2145,22 @@ def start_submission(authorization: str | None = Header(default=None)) -> Submis
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
+        # Check if an active submission is already in progress
+        cursor.execute(
+            "SELECT submission_id FROM mock_submissions WHERE session_id = ? AND status = 'in_progress' ORDER BY started_at DESC LIMIT 1",
+            (session_id,),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "ACTIVE_SUBMISSION_EXISTS",
+                    "message": f"Active submission '{existing['submission_id']}' is already in progress. Finalize it first.",
+                    "submission_id": existing["submission_id"],
+                },
+            )
+
         cursor.execute("SELECT COUNT(*) FROM mock_tasks")
         total_tasks = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM mock_submissions WHERE session_id = ?", (session_id,))

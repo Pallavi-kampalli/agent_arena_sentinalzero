@@ -134,7 +134,7 @@ class SubmissionService:
                 )
 
             # 4. Check hidden task pool sufficiency (Model B: pool must have at least hidden_task_count task definitions)
-            hidden_count = await self.settings_service.get("hidden_task_count", 200)
+            hidden_count = await self.settings_service.get("hidden_task_count", 60)
             pool_stmt = sa.select(sa.func.count()).select_from(Task).where(Task.dataset == "hidden")
             available_tasks = (await self.session.execute(pool_stmt)).scalar() or 0
             if available_tasks < hidden_count:
@@ -261,7 +261,7 @@ class SubmissionService:
                         flag_modified(submission, "per_task_results")
 
             # 3. Check if all tasks have been assigned
-            hidden_count = await self.settings_service.get("hidden_task_count", 200)
+            hidden_count = await self.settings_service.get("hidden_task_count", 60)
             assigned_count_stmt = (
                 sa.select(sa.func.count())
                 .select_from(TaskAssignment)
@@ -460,7 +460,7 @@ class SubmissionService:
         except HTTPException:
             pass  # Window closed, status is updated to expired if applicable
 
-        hidden_count = await self.settings_service.get("hidden_task_count", 200)
+        hidden_count = await self.settings_service.get("hidden_task_count", 60)
         time_budget = await self.settings_service.get("time_budget_per_task_seconds", 180)
         now = datetime.now(UTC)
 

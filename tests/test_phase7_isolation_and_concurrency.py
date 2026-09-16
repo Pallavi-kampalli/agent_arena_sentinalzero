@@ -15,7 +15,7 @@ from agent_arena.scoring.service import ScoringService
 from agent_arena.services.auth_service import hash_token, register_team
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.tool_service import ToolService
-from agent_arena.world.generator import generate_world
+from conftest import generate_world
 
 
 @pytest.fixture

@@ -98,7 +98,7 @@ class ScoringService:
 
             # 2. Load live scoring configuration snapshot
             weights = await self.settings_service.get("scoring_weights", DEFAULT_WEIGHTS)
-            hidden_task_count = await self.settings_service.get("hidden_task_count", 200)
+            hidden_task_count = await self.settings_service.get("hidden_task_count", 60)
             tool_budget = await self.settings_service.get("tool_call_budget_per_task", 40)
             score_aggregation_mode = await self.settings_service.get("score_aggregation", "best")
 

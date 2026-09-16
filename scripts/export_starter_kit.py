@@ -8,77 +8,17 @@ from typing import Any
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
 
-from agent_arena.tasks.generator import FAMILIES, VARIANTS, TaskGenerator  # noqa: E402
-from agent_arena.tasks.validator import validate_task  # noqa: E402
-from agent_arena.world.generator import generate_world  # noqa: E402
-
 
 def load_dev_task_count() -> int:
-    """Reads the authoritative dev_task_count from settings_defaults.json."""
-    defaults_file = ROOT_DIR / "src" / "agent_arena" / "settings_defaults.json"
-    if defaults_file.exists():
-        with open(defaults_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return int(data.get("dev_task_count", 70))
-    return 70
+    """Returns the canonical dev_task_count for the mock simulator (30 tasks)."""
+    return 30
 
 
-def generate_dev_tasks(count: int, seed: int = 1000) -> list[dict[str, Any]]:
-    """Deterministically generates and validates dev tasks across the 6x6 family x variant matrix."""
-    world = generate_world(seed=seed)
-    generator = TaskGenerator(seed=seed)
-    generated_tasks: list[dict[str, Any]] = []
-
-    idx = 0
-    attempt = 0
-    max_attempts = count * 3
-
-    while len(generated_tasks) < count and attempt < max_attempts:
-        attempt += 1
-        family = FAMILIES[idx % len(FAMILIES)]
-        variant = VARIANTS[(idx // len(FAMILIES)) % len(VARIANTS)]
-        task_num = len(generated_tasks) + 1
-        task_id = f"TASK-DEV-{task_num:04d}"
-
-        task = generator.generate_task(
-            base_world=world,
-            family=family,
-            variant=variant,
-            task_id=task_id,
-            dataset="dev",
-        )
-
-        is_valid, error = validate_task(task)
-        if not is_valid:
-            idx += 1
-            continue
-
-        # Sanitize task representation for public starter-kit (dev dataset)
-        public_task = {
-            "task_id": task["task_id"],
-            "dataset": "dev",
-            "family": task["family"],
-            "variant": task["variant"],
-            "input_payload": task["input_payload"],
-            "world_state_seed": task["world_state_seed"],
-            "ground_truth": task["ground_truth"],
-        }
-        generated_tasks.append(public_task)
-        idx += 1
-
-    if len(generated_tasks) < count:
-        raise RuntimeError(f"Failed to generate {count} validated dev tasks (got {len(generated_tasks)}).")
-
-    # Validate 6x6 family x variant coverage
-    found_families = {t["family"] for t in generated_tasks}
-    found_variants = {t["variant"] for t in generated_tasks}
-    if len(found_families) < len(FAMILIES) or len(found_variants) < len(VARIANTS):
-        raise RuntimeError(
-            f"Incomplete matrix coverage: families={len(found_families)}/{len(FAMILIES)}, "
-            f"variants={len(found_variants)}/{len(VARIANTS)}"
-        )
-
-    return generated_tasks
+def load_canonical_dev_tasks(mock_data_dir: Path) -> list[dict[str, Any]]:
+    """Loads canonical dev tasks from mock_data/."""
+    sys.path.insert(0, str(mock_data_dir))
+    from sync_mock_data import build_dev_tasks
+    return build_dev_tasks(mock_data_dir)
 
 
 def extract_domain_rules_code() -> str:
@@ -156,30 +96,24 @@ def main() -> None:
     mock_sim_dir = starter_kit_dir / "mock_simulator"
     mock_sim_dir.mkdir(parents=True, exist_ok=True)
 
-    tasks_file = mock_sim_dir / "dev_tasks.json"
+    data_dir = mock_sim_dir / "data"
     server_file = mock_sim_dir / "server.py"
 
-    # 1. Generate dev tasks JSON
-    tasks = generate_dev_tasks(count=count, seed=1000)
-    tasks_json = json.dumps({"schema_version": 1, "task_count": count, "tasks": tasks}, indent=2)
+    required_files = [
+        "tasks.json",
+        "ground_truth.json",
+        "customers.json",
+        "transactions.json",
+        "subscriptions.json",
+        "policies.json",
+        "previous_cases.json",
+    ]
 
-    # 2. Check or write dev_tasks.json
-    if args.check:
-        if not tasks_file.exists():
-            print(f"ERROR: {tasks_file} does not exist.")
-            sys.exit(1)
-        with open(tasks_file, "r", encoding="utf-8") as f:
-            existing_tasks_json = f.read()
-        if json.loads(existing_tasks_json) != json.loads(tasks_json):
-            print(f"ERROR: {tasks_file} is stale relative to generator settings.")
-            sys.exit(1)
-        print(f"PASS: {tasks_file} is up to date.")
-    else:
-        with open(tasks_file, "w", encoding="utf-8") as f:
-            f.write(tasks_json)
-        print(f"Wrote {len(tasks)} tasks to {tasks_file}")
+    for fname in required_files:
+        if not (data_dir / fname).exists():
+            raise FileNotFoundError(f"Missing required mock data file: {data_dir / fname}")
 
-    # 3. Check or sync generated domain section in server.py
+    # 2. Check or sync generated domain section in server.py
     domain_block = extract_domain_rules_code()
     if server_file.exists():
         with open(server_file, "r", encoding="utf-8") as f:
@@ -210,6 +144,18 @@ def main() -> None:
         if args.check:
             print(f"ERROR: {server_file} does not exist.")
             sys.exit(1)
+
+    # 3. Mirror copy of starter kit to participant directory (export only, no tests)
+    participant_dir = ROOT_DIR.parent / "agent_arena_participant"
+    if participant_dir.exists() and not args.check:
+        import shutil
+        shutil.copytree(
+            starter_kit_dir,
+            participant_dir,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.db", ".venv", ".git", ".pytest_cache", ".env"),
+        )
+        print(f"Synchronized starter-kit copy to {participant_dir}")
 
 
 if __name__ == "__main__":

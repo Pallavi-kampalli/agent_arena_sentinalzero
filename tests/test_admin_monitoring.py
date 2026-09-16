@@ -11,7 +11,7 @@ from agent_arena.models.team import Team
 from agent_arena.models.tool_call_log import ToolCallLog
 from agent_arena.services.auth_service import hash_token
 from agent_arena.services.settings_service import SettingsService
-from agent_arena.world.generator import generate_world
+from conftest import generate_world
 
 
 @pytest.fixture

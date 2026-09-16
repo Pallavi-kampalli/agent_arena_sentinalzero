@@ -1,0 +1,509 @@
+[
+  {
+    "case_id": "CASE-1008001",
+    "customer_id": "CUS-1001051",
+    "date": "2026-05-26T00:00:00+00:00",
+    "category": "refund",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-101",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008002",
+    "customer_id": "CUS-1001027",
+    "date": "2026-08-06T00:00:00+00:00",
+    "category": "refund",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-102",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008003",
+    "customer_id": "CUS-1001017",
+    "date": "2026-08-22T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-103",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008004",
+    "customer_id": "CUS-1001027",
+    "date": "2026-08-17T00:00:00+00:00",
+    "category": "duplicate_payment",
+    "resolution": "refunded",
+    "agent_id": "AGT-104",
+    "notes": "Previous agent notes: Issued full courtesy refund without checking active chargeback status. Customer sounded very upset so agent bypassed standard hold verification.",
+    "was_correct": false,
+    "evidence_used": [
+      "DOC-0991"
+    ]
+  },
+  {
+    "case_id": "CASE-1008005",
+    "customer_id": "CUS-1001042",
+    "date": "2026-06-02T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-100",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008006",
+    "customer_id": "CUS-1001009",
+    "date": "2026-08-24T00:00:00+00:00",
+    "category": "duplicate_payment",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-101",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008007",
+    "customer_id": "CUS-1001015",
+    "date": "2026-06-07T00:00:00+00:00",
+    "category": "refund",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-102",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008008",
+    "customer_id": "CUS-1001031",
+    "date": "2026-08-15T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "refunded",
+    "agent_id": "AGT-103",
+    "notes": "Previous agent notes: Issued full courtesy refund without checking active chargeback status. Customer sounded very upset so agent bypassed standard hold verification.",
+    "was_correct": false,
+    "evidence_used": [
+      "DOC-0991"
+    ]
+  },
+  {
+    "case_id": "CASE-1008009",
+    "customer_id": "CUS-1001016",
+    "date": "2026-05-29T00:00:00+00:00",
+    "category": "refund",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-104",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008010",
+    "customer_id": "CUS-1001016",
+    "date": "2026-07-16T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-100",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008011",
+    "customer_id": "CUS-1001001",
+    "date": "2026-08-24T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-101",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008012",
+    "customer_id": "CUS-1001029",
+    "date": "2026-06-06T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "refunded",
+    "agent_id": "AGT-102",
+    "notes": "Previous agent notes: Issued full courtesy refund without checking active chargeback status. Customer sounded very upset so agent bypassed standard hold verification.",
+    "was_correct": false,
+    "evidence_used": [
+      "DOC-0991"
+    ]
+  },
+  {
+    "case_id": "CASE-1008013",
+    "customer_id": "CUS-1001044",
+    "date": "2026-08-23T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-103",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008014",
+    "customer_id": "CUS-1001016",
+    "date": "2026-06-19T00:00:00+00:00",
+    "category": "refund",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-104",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008015",
+    "customer_id": "CUS-1001039",
+    "date": "2026-08-18T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-100",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008016",
+    "customer_id": "CUS-1001008",
+    "date": "2026-06-13T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "refunded",
+    "agent_id": "AGT-101",
+    "notes": "Previous agent notes: Issued full courtesy refund without checking active chargeback status. Customer sounded very upset so agent bypassed standard hold verification.",
+    "was_correct": false,
+    "evidence_used": [
+      "DOC-0991"
+    ]
+  },
+  {
+    "case_id": "CASE-1008017",
+    "customer_id": "CUS-1001059",
+    "date": "2026-08-26T00:00:00+00:00",
+    "category": "duplicate_payment",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-102",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008018",
+    "customer_id": "CUS-1001054",
+    "date": "2026-06-12T00:00:00+00:00",
+    "category": "duplicate_payment",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-103",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008019",
+    "customer_id": "CUS-1001056",
+    "date": "2026-05-26T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-104",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008020",
+    "customer_id": "CUS-1001027",
+    "date": "2026-07-28T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "refunded",
+    "agent_id": "AGT-100",
+    "notes": "Previous agent notes: Issued full courtesy refund without checking active chargeback status. Customer sounded very upset so agent bypassed standard hold verification.",
+    "was_correct": false,
+    "evidence_used": [
+      "DOC-0991"
+    ]
+  },
+  {
+    "case_id": "CASE-1008021",
+    "customer_id": "CUS-1001010",
+    "date": "2026-07-05T00:00:00+00:00",
+    "category": "duplicate_payment",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-101",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008022",
+    "customer_id": "CUS-1001041",
+    "date": "2026-08-17T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-102",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008023",
+    "customer_id": "CUS-1001014",
+    "date": "2026-07-20T00:00:00+00:00",
+    "category": "duplicate_payment",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-103",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008024",
+    "customer_id": "CUS-1001058",
+    "date": "2026-06-09T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "refunded",
+    "agent_id": "AGT-104",
+    "notes": "Previous agent notes: Issued full courtesy refund without checking active chargeback status. Customer sounded very upset so agent bypassed standard hold verification.",
+    "was_correct": false,
+    "evidence_used": [
+      "DOC-0991"
+    ]
+  },
+  {
+    "case_id": "CASE-1008025",
+    "customer_id": "CUS-1001035",
+    "date": "2026-05-29T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-100",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008026",
+    "customer_id": "CUS-1001022",
+    "date": "2026-07-20T00:00:00+00:00",
+    "category": "duplicate_payment",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-101",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008027",
+    "customer_id": "CUS-1001055",
+    "date": "2026-06-18T00:00:00+00:00",
+    "category": "duplicate_payment",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-102",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008028",
+    "customer_id": "CUS-1001014",
+    "date": "2026-07-18T00:00:00+00:00",
+    "category": "refund",
+    "resolution": "refunded",
+    "agent_id": "AGT-103",
+    "notes": "Previous agent notes: Issued full courtesy refund without checking active chargeback status. Customer sounded very upset so agent bypassed standard hold verification.",
+    "was_correct": false,
+    "evidence_used": [
+      "DOC-0991"
+    ]
+  },
+  {
+    "case_id": "CASE-1008029",
+    "customer_id": "CUS-1001028",
+    "date": "2026-07-22T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-104",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008030",
+    "customer_id": "CUS-1001026",
+    "date": "2026-08-05T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-100",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008031",
+    "customer_id": "CUS-1001030",
+    "date": "2026-07-28T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-101",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008032",
+    "customer_id": "CUS-1001049",
+    "date": "2026-05-24T00:00:00+00:00",
+    "category": "refund",
+    "resolution": "refunded",
+    "agent_id": "AGT-102",
+    "notes": "Previous agent notes: Issued full courtesy refund without checking active chargeback status. Customer sounded very upset so agent bypassed standard hold verification.",
+    "was_correct": false,
+    "evidence_used": [
+      "DOC-0991"
+    ]
+  },
+  {
+    "case_id": "CASE-1008033",
+    "customer_id": "CUS-1001049",
+    "date": "2026-06-20T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-103",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008034",
+    "customer_id": "CUS-1001014",
+    "date": "2026-08-21T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-104",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008035",
+    "customer_id": "CUS-1001036",
+    "date": "2026-08-09T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-100",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008036",
+    "customer_id": "CUS-1001021",
+    "date": "2026-06-05T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "refunded",
+    "agent_id": "AGT-101",
+    "notes": "Previous agent notes: Issued full courtesy refund without checking active chargeback status. Customer sounded very upset so agent bypassed standard hold verification.",
+    "was_correct": false,
+    "evidence_used": [
+      "DOC-0991"
+    ]
+  },
+  {
+    "case_id": "CASE-1008037",
+    "customer_id": "CUS-1001046",
+    "date": "2026-06-18T00:00:00+00:00",
+    "category": "cancellation",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-102",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008038",
+    "customer_id": "CUS-1001050",
+    "date": "2026-06-14T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-103",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  },
+  {
+    "case_id": "CASE-1008039",
+    "customer_id": "CUS-1001028",
+    "date": "2026-06-22T00:00:00+00:00",
+    "category": "delivery_dispute",
+    "resolution": "resolved_explanation",
+    "agent_id": "AGT-104",
+    "notes": "Previous agent notes: Verified account credentials and advised customer on billing schedule.",
+    "was_correct": true,
+    "evidence_used": [
+      "DOC-1001"
+    ]
+  }
+]

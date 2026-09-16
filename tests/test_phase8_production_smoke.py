@@ -13,7 +13,13 @@ ADMIN_SECRET = os.environ.get("ADMIN_PANEL_SECRET", "dev-admin-secret-key-32-cha
 
 @pytest.fixture(scope="module")
 def client():
-    with httpx.Client(base_url=TARGET_URL, timeout=10.0) as c:
+    with httpx.Client(base_url=TARGET_URL, timeout=5.0) as c:
+        try:
+            r = c.get("/health")
+            if r.status_code != 200:
+                pytest.skip(f"Live server at {TARGET_URL} returned status {r.status_code}")
+        except (httpx.ConnectError, httpx.TimeoutException):
+            pytest.skip(f"Live server at {TARGET_URL} is not reachable. Start via Docker Compose to run live smoke tests.")
         yield c
 
 

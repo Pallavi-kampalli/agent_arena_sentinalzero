@@ -1,78 +1,42 @@
-# Agent Arena — SupportOps Participant Starter Kit
+# Agent Arena: SupportOps — Participant Starter Kit
 
-Welcome to **Agent Arena: SupportOps**. This repository contains the official starter kit, local development simulator, and Python SDK for building autonomous customer support agents.
-
----
-
-## 1. What is Agent Arena: SupportOps?
-
-In this competition, you are building an autonomous customer support agent for a billing and account platform.
-
-Your agent receives customer messages, investigates account records and company policies using read tools, takes corrective actions (or requests verification / escalates to specialists), and returns a structured resolution citing concrete evidence.
-
-### The Defining Mechanic: Server-Side Enforcement
-State-changing action tools (like `issue_refund` or `cancel_subscription`) are **not** dumb functions that blindly do what you ask. Every action is evaluated server-side against authoritative policies and constraints before state is updated:
-- If eligible: the action succeeds and world state updates.
-- If ineligible: the tool returns a structured rejection (`{"error": "INELIGIBLE", "reason": "...", "policy_ref": "..."}`) and **state remains completely untouched**.
-- You must build an agent capable of reading rejection feedback, gathering more evidence, and making a second, better decision.
+Welcome to **Agent Arena: SupportOps**. This repository contains the official competition SDK, local development simulator, sample tabular datasets, and runtime harness for building autonomous customer support agents.
 
 ---
 
-## 2. Quickstart: 3-Minute Setup
+## 1. Architecture: Clean Separation of Concerns
 
-### Prerequisites
-- Python 3.11+
-- No Docker required!
-- No database installation required!
+The starter kit enforces a clean, modular boundary between the **runtime/orchestration layer** (`main.py`) and the **participant agent** (`agent.py`):
 
-### Step 1: Install Dependencies
-Create a virtual environment and install the participant runtime requirements:
-```bash
-python -m venv .venv
-
-# On Linux / macOS:
-source .venv/bin/activate
-
-# On Windows:
-.venv\Scripts\activate
-
-# Install participant agent dependencies:
-pip install -r requirements.txt
-
-# Install mock simulator server dependencies:
-pip install -r mock_simulator/requirements.txt
+```text
+main.py
+    ↓
+gets task from API (Mock Simulator or Live Arena)
+    ↓
+provides task + ToolsClient
+    ↓
+agent.solve(task, tools)
+    ↓
+gets returned answer
+    ↓
+submits answer to API
 ```
 
-### Step 2: Configure Environment
-Copy the example environment configuration:
-```bash
-# On Linux / macOS:
-cp .env.example .env
+### Responsibility Breakdown:
 
-# On Windows:
-copy .env.example .env
-```
-By default, `.env` points to `http://localhost:8000` with practice bearer token `dev-practice-token`.
-
-### Step 3: Start the Local Mock Simulator
-In Terminal 1, start the local mock simulator:
-```bash
-python mock_simulator/server.py
-```
-The simulator starts on `http://127.0.0.1:8000`, preloaded with the public development dataset.
-
-### Step 4: Run the Example Agent
-In Terminal 2, execute the end-to-end task runner:
-```bash
-python example_run.py
-```
-You should see the task assigned, the baseline agent investigate and decide, the submission posted, and instant practice correctness feedback printed to your terminal.
+| Component | File | Responsibilities |
+|:---|:---|:---|
+| **Participant Agent** | `agent.py` | **The ONLY file participants edit.**<br>• Reason over customer inquiry<br>• Query relevant knowledge and account tools<br>• Take eligible corrective actions<br>• Formulate decision and return final Section 7 answer |
+| **Orchestration Runtime** | `main.py` | • Loads `.env` configuration (`BASE_URL`, `BEARER_TOKEN`, `MODE`)<br>• Connects to API using `ArenaClient`<br>• Runs in **Practice** or **Submission** mode<br>• Dispatches tasks sequentially to `agent.solve` (rate limit safe)<br>• Validates output contract schema<br>• Submits final answer to API and displays feedback |
+| **Tools SDK** | `sdk/tools_client.py` | • `ToolsClient`: Exposes ONLY the 10 domain tools to `agent.py`<br>• `ArenaClient`: Manages task retrieval and submission for `main.py` |
+| **Local Mock Simulator** | `mock_simulator/` | • Offline FastAPI/SQLite server preloaded with **30 development tasks** for local testing<br>• Built-in visual debug dashboard at `http://127.0.0.1:8001/dashboard` |
+| **Sample Data Export** | `sample_data/` | • Pre-dumped CSV files representing the mock world state (Seed 1000) and tasks with full answers<br>• For human exploration and understanding only |
 
 ---
 
-## 3. Implementing Your Agent: `agent.py`
+## 2. Participant Entry Point: `agent.py`
 
-Your agent code lives in `agent.py`. You must implement the following function:
+`agent.py` is the only file you modify. Its interface is minimal and clean:
 
 ```python
 from typing import Any
@@ -80,125 +44,191 @@ from sdk.tools_client import ToolsClient
 
 
 def solve(task: dict[str, Any], tools: ToolsClient) -> dict[str, Any]:
-    """Autonomous agent solve loop.
-
-    Args:
-        task: Dictionary with 'task_id', 'customer_id', 'customer_message'.
-        tools: Initialized ToolsClient for invoking API tools.
-
-    Returns:
-        Structured output matching Section 4 contract.
-    """
-    ...
+    """Implement your autonomous customer support agent here."""
+    raise NotImplementedError
 ```
+
+`agent.py` contains **ZERO** orchestration code:
+- No API connection logic
+- No authentication handling
+- No task fetching or polling loops
+- No submission handling
+- No environment loading
+
+The participant receives only `task` and `tools`, and returns the final answer.
 
 ---
 
-## 4. Required Output Contract
+## 3. Task Input
 
-Your `solve(task, tools)` function must return a Python dictionary with the following schema:
+When `main.py` calls `agent.solve(task, tools)`, `task` contains:
 
-```json
+```python
 {
-  "case_classification": {
-    "category": "billing",
-    "issue": "duplicate_payment",
-    "severity": "medium"
-  },
-  "decision": {
-    "resolution": "refund",
-    "escalation_required": false
-  },
-  "evidence": ["TXN-19382", "DOC-1842"],
-  "uncertainties": [],
-  "customer_response": "We have investigated your duplicate charge and issued a full refund.",
-  "confidence": 0.85
+    "task_id": "TASK-DEV-0001",
+    "customer_id": "CUS-1001050",
+    "customer_message": "Hello, I was charged twice on my card for $99.0. Please refund the extra charge immediately."
 }
 ```
 
-### Key Field Requirements:
-- **`case_classification`**:
-  - `category`: string (e.g. `"billing"`, `"account"`, `"security"`, `"delivery"`).
-  - `issue`: string (e.g. `"duplicate_payment"`, `"subscription_cancellation"`, `"refund_request"`).
-  - `severity`: one of `"low"`, `"medium"`, `"high"`, `"critical"`.
-- **`decision`**:
-  - `resolution`: one of `"refund"`, `"deny"`, `"escalate"`, `"request_info"`.
-  - `escalation_required`: boolean (`true` if case requires human escalation, `false` otherwise).
-- **`evidence`**: List of entity IDs (transactions, documents, customer IDs, case IDs) your agent **actually retrieved** using read tools during this task. Guessing IDs you never retrieved is penalized.
-- **`uncertainties`**: List of strings describing any missing information or unresolved ambiguity.
-- **`customer_response`**: Final explanation message presented to the customer.
-- **`confidence`**: Float from `0.0` to `1.0`.
+### Field Definitions:
+- **`task_id`** (`str`): Unique identifier for the assigned task instance. Used when escalating cases (`tools.escalate_case(case_id=task_id, ...)`).
+- **`customer_id`** (`str`): Customer identifier. Used with read and action tools to query profile, transactions, subscriptions, and history.
+- **`customer_message`** (`str`): The inbound inquiry or dispute submitted by the customer.
 
 ---
 
-## 5. Available Tools
+## 4. Tools Available on `tools: ToolsClient`
 
-The SDK (`sdk/tools_client.py`) provides 10 canonical tools:
+The `tools` argument provides access to **ALL 10 participant-facing tools**:
 
-### Read Tools (Safe — Never change state)
-1. `tools.search_knowledge(query: str, top_k: int = 5)`
-   - Searches policy documents and FAQs. Returns snippet, doc ID, category, and `updated_at`.
-2. `tools.get_document(document_id: str)`
-   - Retrieves full text of a policy or document by its ID.
-3. `tools.get_customer(customer_id: str)`
-   - Retrieves customer profile, tier, and account status.
-4. `tools.get_transactions(customer_id: str, start_date: str | None = None, end_date: str | None = None)`
-   - Retrieves customer payment and refund history.
-5. `tools.get_subscription(customer_id: str)`
-   - Retrieves active plan, lock-in date, and status.
-6. `tools.get_previous_cases(customer_id: str, limit: int = 5)`
-   - Retrieves historical support tickets.
+### Read Tools (Safe — Inspect state without mutations)
 
-### Action Tools (State-Changing — Server-side enforced)
-7. `tools.issue_refund(transaction_id: str, amount: float, reason: str)`
-   - Checks refund window, active chargeback holds, and amount limits against current policy.
-8. `tools.cancel_subscription(customer_id: str, subscription_id: str)`
-   - Checks contractual lock-in and unresolved billing disputes.
-9. `tools.escalate_case(case_id: str, team: str, reason: str)`
-   - Hands off case to a specialist. The `reason` **must** cite a retrieved evidence ID or policy ID.
-10. `tools.request_verification(customer_id: str, verification_type: str = "identity")`
-    - Requests customer identity/billing verification. This is the **safe fallback action** that always succeeds.
+#### 1. `tools.search_knowledge(query: str, top_k: int = 5) -> dict[str, Any]`
+- **Parameters**: `query` (search keywords), `top_k` (maximum results, default 5).
+- **Returns**: `{"results": [{"id": "DOC-1002", "title": "...", "snippet": "...", "category": "...", "updated_at": "..."}]}`
+- **Purpose**: Searches policy manuals, FAQs, and terms of service.
+
+#### 2. `tools.get_document(document_id: str) -> dict[str, Any]`
+- **Parameters**: `document_id` (e.g. `"DOC-1002"`).
+- **Returns**: `{"document": {"id": "DOC-1002", "title": "...", "content": "...", "category": "...", "updated_at": "..."}}`
+- **Purpose**: Retrieves the full text and clauses of a specific policy document.
+
+#### 3. `tools.get_customer(customer_id: str) -> dict[str, Any]`
+- **Parameters**: `customer_id` (e.g. `"CUS-1001050"`).
+- **Returns**: `{"customer": {"id": "...", "name": "...", "email": "...", "tier": "...", "verification_status": "...", "account_status": "..."}}`
+- **Purpose**: Retrieves customer profile, tier, and account status.
+
+#### 4. `tools.get_transactions(customer_id: str, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]`
+- **Parameters**: `customer_id`, optional ISO timestamp bounds `start_date`, `end_date`.
+- **Returns**: `{"transactions": [{"id": "TXN-8028", "amount": 99.0, "status": "settled", ...}]}`
+- **Purpose**: Lists transactions associated with the customer account.
+
+#### 5. `tools.get_subscription(customer_id: str) -> dict[str, Any]`
+- **Parameters**: `customer_id`.
+- **Returns**: `{"subscription": {"id": "SUB-101", "plan": "pro_monthly", "status": "active", ...}}`
+- **Purpose**: Retrieves current active subscription details for the customer.
+
+#### 6. `tools.get_previous_cases(customer_id: str, limit: int = 5) -> dict[str, Any]`
+- **Parameters**: `customer_id`, `limit` (default 5).
+- **Returns**: `{"cases": [{"case_id": "CASE-901", "resolution": "refund", "was_correct": false, ...}]}`
+- **Purpose**: Retrieves past support tickets and agent actions (essential for `previous_agent_was_wrong` disputes).
 
 ---
 
-## 6. Tool Rejection Semantics
+### Action Tools (State Mutating — Server-enforced eligibility)
 
-When an action tool is blocked by server-side policy enforcement, it returns HTTP 200 with an ineligibility payload:
+#### 7. `tools.issue_refund(transaction_id: str, amount: float, reason: str) -> dict[str, Any]`
+- **Requires Prior Read**: You must read the relevant transaction or policy before executing this action.
+- **Enforcement**: Checks transaction age, chargeback status, dispute locks, and amount limits.
 
-```json
+#### 8. `tools.cancel_subscription(subscription_id: str, immediate: bool, reason: str) -> dict[str, Any]`
+- **Requires Prior Read**: You must read the customer subscription or cancellation policy first.
+- **Enforcement**: Verifies minimum commitment period and open billing dispute status.
+
+#### 9. `tools.escalate_case(case_id: str, department: str, reason: str, priority: str = "medium") -> dict[str, Any]`
+- **Requires Prior Read**: Requires grounded evidence from customer history, transactions, or policy rules.
+- **Enforcement**: Validates department choices (`tier_3_technical`, `fraud_prevention`, `legal_and_compliance`, etc.) and priority justification.
+
+#### 10. `tools.request_verification(customer_id: str, verification_type: str, reason: str) -> dict[str, Any]`
+- **Requires Prior Read**: Requires customer profile retrieval.
+- **Enforcement**: Used for identity verification and anti-fraud lock requirements.
+
+---
+
+## 5. Output Contract (Section 7)
+
+Your `agent.solve(task, tools)` function must return a dictionary conforming to the standard Section 7 contract:
+
+```python
 {
-  "error": "INELIGIBLE",
-  "reason": "chargeback_investigation_active",
-  "policy_ref": "DOC-1842"
+    "case_classification": {
+        "category": "billing",       # Category string
+        "issue": "duplicate_charge", # Specific issue identifier
+        "severity": "medium",        # One of: "low", "medium", "high", "critical"
+    },
+    "decision": {
+        "resolution": "refund",      # One of: "refund", "deny", "escalate", "request_info"
+        "escalation_required": False # True if passed to human/specialist
+    },
+    "evidence": [
+        "TXN-DUP-A-8028", "TXN-DUP-B-2624", "DOC-1002"
+    ],
+    "uncertainties": [],
+    "customer_response": "We have identified the duplicate charge and issued a full refund of $99.00.",
+    "confidence": 0.95
 }
 ```
 
-Notice that:
-- This is **not** an HTTP error or Python exception. It is a valid business outcome.
-- State was **not** changed.
-- The response points to the governing policy (`policy_ref`). You should retrieve that policy using `tools.get_document("DOC-1842")` to understand why it failed and choose a new course of action (e.g. escalating to the fraud team).
+---
+
+## 6. Sample Mock Data (`sample_data/`)
+
+The `sample_data/` folder contains exported CSV files from the mock environment (Seed 1000):
+- `tasks.csv`: The 30 development tasks **with full ground truth reference answers**.
+- `customers.csv`: Customer profile records.
+- `transactions.csv`: Transaction history and refund statuses.
+- `subscriptions.csv`: Recurring subscription plans and cancellation lock periods.
+- `policies.csv`: Authoritative policies and operating procedures.
+- `previous_cases.csv`: Historical support tickets.
+
+> **CRITICAL ARCHITECTURAL NOTE:**
+> - The mock dataset (Seed 1000) and the live competition dataset (Seed 50000+) are **completely disjoint**.
+> - Live evaluation features unseen customer names, transaction IDs, subscription dates, and edge cases.
+> - **DO NOT hardcode answers or rules based on these CSV files.** Your agent must fetch evidence and verify policies dynamically via the `tools` client.
 
 ---
 
-## 7. Moving From Practice to Production
+## 7. Execution Modes & Running the Agent
 
-The local mock simulator and the production competition API share the **exact same participant contract**.
+### Environment Setup
+```bash
+# Create virtualenv and install dependencies
+python -m venv .venv
 
-To switch to production during the live event:
-1. Open `.env`.
-2. Change `BASE_URL` to the production competition URL provided by organizers.
-3. Change `BEARER_TOKEN` to your team's secret token.
-4. That's it!
+# Activate:
+.\.venv\Scripts\activate      # Windows
+source .venv/bin/activate       # Linux / macOS
 
-```env
-# Before (Local Practice):
-BASE_URL=http://localhost:8000
-BEARER_TOKEN=dev-practice-token
-
-# After (Live Competition):
-BASE_URL=https://arena.competition.org
-BEARER_TOKEN=your-team-production-token
+pip install -r requirements.txt
+pip install -r mock_simulator/requirements.txt
 ```
 
-**Zero changes to `agent.py`, `sdk/tools_client.py`, or your tool calling code.**
-In production, ground truth is never revealed, and submissions are scored across all 7 competition dimensions by the batch evaluator.
+### Execution Modes
+
+#### Mode A: Practice Mode (`--mode practice`)
+Designed for interactive testing and local debugging:
+- Runs ad-hoc tasks with optional poll intervals.
+- In mock simulator, returns immediate ground-truth diff feedback for each task.
+- CLI examples:
+  ```bash
+  python main.py --mode practice --once             # Process 1 task and stop
+  python main.py --mode practice --max-tasks 5      # Process 5 tasks
+  ```
+
+#### Mode B: Submission Mode (`--mode submission`)
+Designed for full competition epoch execution:
+- Initializes a submission run with the API.
+- Loops through all tasks sequentially without artificial delays (rate limit safe).
+- Solves each task, submits the decision to unlock the next task, and collects answers in memory.
+- Finalizes the submission run upon completing the epoch.
+- In mock simulator (30 tasks): displays total accuracy score (e.g. `25/30 tasks correct (83.3%)`).
+- In live arena (60 tasks): finalizes the official submission run.
+- CLI example:
+  ```bash
+  python main.py --mode submission
+  ```
+
+---
+
+## 8. Mock Simulator Debugger (`/dashboard`)
+
+When testing against the local mock simulator, open:
+**`http://127.0.0.1:8001/dashboard`**
+
+The dashboard provides complete local ground truth verification:
+- **Score Report**: Real-time pass/fail count and accuracy percentage (`X / 30 tasks correct`).
+- **Failed Tasks**: Full diff analysis comparing your agent's resolution, escalation, and evidence against the ground truth.
+- **Passed Tasks**: Expandable detail cards showing the exact customer message, ground truth matches, and tool call traces.
+- **Auto-Refresh & Reset**: Live auto-refresh as your agent solves tasks, with a one-click reset button.
+- **Privacy Guaranteed**: The live competition leaderboard and hidden test evaluations are never exposed to participants.

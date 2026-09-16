@@ -15,7 +15,7 @@ from agent_arena.scoring.service import ScoringService
 from agent_arena.services.auth_service import hash_token
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.submission_service import SubmissionService
-from agent_arena.world.generator import generate_world
+from conftest import generate_world
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ async def test_live_settings_update_without_restart_or_redeploy(
 
     # 1. Authoritative baseline check
     baseline_val = await settings.get("hidden_task_count")
-    assert baseline_val == 200, f"Expected canonical baseline default 200, got {baseline_val}"
+    assert baseline_val == 60, f"Expected canonical baseline default 60, got {baseline_val}"
 
     # 2. Record process identity
     pid_before = os.getpid()
@@ -73,7 +73,6 @@ async def test_live_settings_update_without_restart_or_redeploy(
         team_id=team_id,
         team_name=f"LiveSettingsTeam_{uuid.uuid4().hex[:6]}",
         bearer_token_hash=hash_token("dummy-tok"),
-        token_version=1,
     )
     db_session.add(team)
     await db_session.commit()
@@ -91,12 +90,12 @@ async def test_live_settings_update_without_restart_or_redeploy(
     # 6. Restore canonical baseline via HTTP PUT endpoint
     restore_res = await client.put(
         "/admin/settings/hidden_task_count",
-        json={"value": 200},
+        json={"value": 60},
         headers=admin_headers,
     )
     assert restore_res.status_code == 200
-    assert restore_res.json()["new_value"] == 200
-    assert await settings.get("hidden_task_count") == 200
+    assert restore_res.json()["new_value"] == 60
+    assert await settings.get("hidden_task_count") == 60
 
 
 @pytest.mark.asyncio

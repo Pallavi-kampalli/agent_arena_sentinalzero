@@ -126,9 +126,9 @@ from pathlib import Path
 starter_kit_path = Path(r"{pkg_dir}")
 sys.path.insert(0, str(starter_kit_path))
 
-# Execute example_run
-import example_run
-example_run.main()
+# Execute main runtime
+import main
+main.main(once=True)
 
 # Verify import graph has zero references to organizer source tree
 for mod_name in list(sys.modules.keys()):

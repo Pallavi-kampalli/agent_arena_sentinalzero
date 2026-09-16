@@ -110,7 +110,7 @@ def validate_setting_value(key: str, value: Any, current_value: Any = None) -> A
             return validated.model_dump()
         raise ValueError("scoring_weights must be a dictionary with all 7 scoring dimensions")
 
-    elif key in {"hidden_task_count", "dev_task_count"} or key in {
+    elif key == "hidden_task_count" or key in {
         "tool_call_budget_per_task",
         "time_budget_per_task_seconds",
         "rate_limit_tool_calls_per_min",

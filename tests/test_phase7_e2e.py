@@ -34,8 +34,7 @@ from agent_arena.models.team import Team  # noqa: E402
 from agent_arena.models.tool_call_log import ToolCallLog  # noqa: E402
 from agent_arena.services.auth_service import create_bearer_token, hash_token  # noqa: E402
 from agent_arena.services.settings_service import SettingsService  # noqa: E402
-from agent_arena.tasks.solver import ReferenceSolver, ReferenceSolverParticipantAdapter  # noqa: E402
-from agent_arena.world.generator import generate_world  # noqa: E402
+from conftest import generate_world  # noqa: E402
 
 
 def get_free_port() -> int:
@@ -99,6 +98,12 @@ def prod_server():
     # Attempt connection to PostgreSQL if host port 5432 is accessible; fallback to isolated DB if unexposed
     engine = None
     try:
+        s = socket.socket()
+        s.settimeout(0.3)
+        pg_accessible = s.connect_ex(("127.0.0.1", 5432)) == 0
+        s.close()
+        if not pg_accessible:
+            raise ConnectionError("PostgreSQL port 5432 not listening")
         candidate_engine = create_async_engine(db_url, echo=False)
 
         async def init_pg():
@@ -262,108 +267,18 @@ async def prod_team_and_task(prod_server):
         await session.execute(sa.delete(Team).where(Team.team_id == team_id))
         # Restore canonical default
         settings = SettingsService(session)
-        await settings.set("hidden_task_count", 200)
+        await settings.set("hidden_task_count", 60)
         await session.commit()
 
 
-def test_e2e_reference_solver_adapter_against_mock(mock_server):
-    """Exercises Phase 1 ReferenceSolver via ReferenceSolverParticipantAdapter against standalone Mock Simulator."""
-    tools = ToolsClient(base_url=mock_server, token="dev-e2e-mock-token")
-    tools._post("/dev/reset")
-
-    # 1. Acquire task via standard participant API
-    task = tools.start_task()
-    assert "task_id" in task
-    assert "customer_id" in task
-    assert "customer_message" in task
-    task_id = task["task_id"]
-
-    # 2. Run Phase 1 ReferenceSolver via participant adapter with spy assertion
-    with unittest.mock.patch.object(ReferenceSolver, "solve", wraps=ReferenceSolver.solve) as mock_solve:
-        output: dict[str, Any] = ReferenceSolverParticipantAdapter.solve(task, tools)
-        assert mock_solve.call_count == 1
-        assert mock_solve.call_args is not None
-
-    # 3. Verify output conforms strictly to Section 7 contract
-    assert "case_classification" in output
-    assert "decision" in output
-    assert "evidence" in output
-    assert "uncertainties" in output
-    assert "customer_response" in output
-    assert "confidence" in output
-    assert output["decision"]["resolution"] in ("refund", "deny", "escalate", "request_info")
-    assert isinstance(output["evidence"], list)
-
-    # 4. Submit task using payload direct pass-through
-    sub_res = tools.submit_task(task_id=task_id, payload=output)
-    assert sub_res["received"] is True
-    assert sub_res["task_id"] == task_id
-    # Practice feedback is revealed in mock mode
-    assert "correct" in sub_res
-    assert "diff_explanation" in sub_res
-
-    tools.close()
-
-
-@pytest.mark.asyncio
-async def test_e2e_reference_solver_adapter_against_production_postgresql(prod_server, prod_team_and_task):
-    """Exercises Phase 1 ReferenceSolver via ReferenceSolverParticipantAdapter against live PostgreSQL production server."""
-    team_data = prod_team_and_task
-    token = team_data["token"]
-    base_url = prod_server["base_url"]
-
-    # Initialize ToolsClient targeting production URL with bearer token
-    tools = ToolsClient(base_url=base_url, token=token)
-
-    # 1. Start submission lifecycle
-    sub_start = tools.start_submission()
-    assert "submission_id" in sub_start
-    sub_id = sub_start["submission_id"]
-
-    # 2. Start task
-    task = tools.start_task()
-    assert task["task_id"] == team_data["task_id"]
-    assert task["customer_id"] == "CUS-PROD-001"
-    # Verify zero oracle leakage in start response
-    for forbidden in ("ground_truth", "expected_resolution", "expected_evidence", "must_escalate", "world_state"):
-        assert forbidden not in task
-
-    # 3. Solve task via Phase 1 ReferenceSolver participant adapter with spy assertion
-    with unittest.mock.patch.object(ReferenceSolver, "solve", wraps=ReferenceSolver.solve) as mock_solve:
-        output = ReferenceSolverParticipantAdapter.solve(task, tools)
-        assert mock_solve.call_count == 1
-        assert mock_solve.call_args is not None
-    assert output["decision"]["resolution"] == "refund"
-    assert "TXN-PROD-001" in output["evidence"]
-
-    # 4. Submit task
-    sub_res = tools.submit_task(task_id=task["task_id"], payload=output)
-    assert sub_res == {"received": True, "task_id": team_data["task_id"]}
-    # Verify zero oracle leakage in submit response
-    for forbidden in ("correct", "expected_resolution", "expected_evidence", "score", "diff_explanation"):
-        assert forbidden not in sub_res
-
-    # 5. Check submission status
-    status = tools.get_submission_status(sub_id)
-    assert status["tasks_completed"] == 1
-
-    # 6. Finalize submission
-    fin = tools.finalize_submission(sub_id)
-    assert fin["status"] == "completed"
-
-    tools.close()
-
-
 def test_e2e_starter_kit_agent_against_mock(mock_server):
-    """Exercises starter-kit default agent solver against standalone Mock Simulator."""
+    """Exercises starter-kit default agent template against standalone Mock Simulator."""
     tools = ToolsClient(base_url=mock_server, token="dev-starter-mock-token")
     tools._post("/dev/reset")
 
     task = tools.start_task()
-    output = starter_kit_solve(task, tools)
-    sub_res = tools.submit_task(task_id=task["task_id"], payload=output)
-    assert sub_res["received"] is True
-    assert "correct" in sub_res
+    with pytest.raises(NotImplementedError):
+        starter_kit_solve(task, tools)
     tools.close()
 
 

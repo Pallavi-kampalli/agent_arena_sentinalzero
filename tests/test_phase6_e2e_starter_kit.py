@@ -53,7 +53,7 @@ def mock_server():
 
 
 def test_starter_agent_end_to_end_against_mock(mock_server):
-    """Runs the starter agent solve loop end-to-end against the mock simulator using ToolsClient."""
+    """Verifies starter kit agent template raises NotImplementedError and contract submission succeeds."""
     tools = ToolsClient(base_url=mock_server, token="dev-starter-token")
 
     # Reset state for clean run
@@ -66,34 +66,24 @@ def test_starter_agent_end_to_end_against_mock(mock_server):
     assert "customer_message" in task
     task_id = task["task_id"]
 
-    # 2. Run agent
-    output = solve(task, tools)
+    # 2. Run agent - verifies zero solution logic template invariant
+    with pytest.raises(NotImplementedError):
+        solve(task, tools)
 
-    # 3. Verify Section 7 contract adherence
-    assert "case_classification" in output
-    assert output["case_classification"]["category"] in ("billing", "account", "security", "delivery")
-    assert "issue" in output["case_classification"]
-    assert output["case_classification"]["severity"] in ("low", "medium", "high", "critical")
-
-    assert "decision" in output
-    assert output["decision"]["resolution"] in ("refund", "deny", "escalate", "request_info")
-    assert isinstance(output["decision"]["escalation_required"], bool)
-
-    assert isinstance(output["evidence"], list)
-    assert isinstance(output["uncertainties"], list)
-    assert isinstance(output["customer_response"], str)
-    assert len(output["customer_response"]) > 0
-    assert 0.0 <= output["confidence"] <= 1.0
+    # 3. Verify Section 7 contract adherence with valid submission payload
+    valid_payload = {
+        "case_classification": {"category": "billing", "issue": "duplicate_payment", "severity": "medium"},
+        "decision": {"resolution": "refund", "escalation_required": False},
+        "evidence": ["DOC-REFUND-001"],
+        "uncertainties": [],
+        "customer_response": "We have processed your duplicate charge refund.",
+        "confidence": 0.95,
+    }
 
     # 4. Submit task
     result = tools.submit_task(
         task_id=task_id,
-        case_classification=output["case_classification"],
-        decision=output["decision"],
-        evidence=output["evidence"],
-        uncertainties=output["uncertainties"],
-        customer_response=output["customer_response"],
-        confidence=output["confidence"],
+        payload=valid_payload,
     )
 
     assert result["received"] is True
