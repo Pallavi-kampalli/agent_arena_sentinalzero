@@ -275,8 +275,6 @@ def test_score_task_success_exact_state_match_binary():
     # 1. Full match -> 1.0
     assert (
         score_task_success(
-            family="refund_request",
-            variant="normal",
             runtime_state=valid_state,
             ground_truth=gt,
             submitted_resolution="refund",
@@ -288,8 +286,6 @@ def test_score_task_success_exact_state_match_binary():
     # 2. Resolution mismatch -> 0.0 (no partial credit)
     assert (
         score_task_success(
-            family="refund_request",
-            variant="normal",
             runtime_state=valid_state,
             ground_truth=gt,
             submitted_resolution="deny",
@@ -301,8 +297,6 @@ def test_score_task_success_exact_state_match_binary():
     # 3. Escalation mismatch -> 0.0 (no partial credit)
     assert (
         score_task_success(
-            family="refund_request",
-            variant="normal",
             runtime_state=valid_state,
             ground_truth=gt,
             submitted_resolution="refund",
@@ -315,8 +309,6 @@ def test_score_task_success_exact_state_match_binary():
     wrong_state = {"transactions": [{"id": "TXN-101", "refund_status": "completed", "refunded_amount": 0.0}]}
     assert (
         score_task_success(
-            family="refund_request",
-            variant="normal",
             runtime_state=wrong_state,
             ground_truth=gt,
             submitted_resolution="refund",
@@ -329,8 +321,6 @@ def test_score_task_success_exact_state_match_binary():
     wrong_amount_state = {"transactions": [{"id": "TXN-101", "refund_status": "refunded", "refunded_amount": 50.0}]}
     assert (
         score_task_success(
-            family="refund_request",
-            variant="normal",
             runtime_state=wrong_amount_state,
             ground_truth=gt,
             submitted_resolution="refund",

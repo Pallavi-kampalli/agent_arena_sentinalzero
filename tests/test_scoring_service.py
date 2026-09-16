@@ -43,8 +43,6 @@ async def seeded_hidden_tasks(db_session: AsyncSession):
     task1 = Task(
         task_id="TASK-SCORING-001",
         dataset="hidden",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-7001", "customer_message": "Please refund TXN-7001."},
         world_state_seed={
             "current_date": "2026-09-15T00:00:00Z",
@@ -85,8 +83,6 @@ async def seeded_hidden_tasks(db_session: AsyncSession):
     task2 = Task(
         task_id="TASK-SCORING-002",
         dataset="hidden",
-        family="subscription_cancellation",
-        variant="adversarial",
         input_payload={"customer_id": "CUS-7002", "customer_message": "Cancel SUB-7002."},
         world_state_seed={
             "current_date": "2026-09-15T00:00:00Z",

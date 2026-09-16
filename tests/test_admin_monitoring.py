@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from conftest import generate_world
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +12,6 @@ from agent_arena.models.team import Team
 from agent_arena.models.tool_call_log import ToolCallLog
 from agent_arena.services.auth_service import hash_token
 from agent_arena.services.settings_service import SettingsService
-from conftest import generate_world
 
 
 @pytest.fixture
@@ -105,8 +105,6 @@ async def test_admin_system_health_and_pool_warning(client: AsyncClient, admin_h
         t = Task(
             task_id=f"TASK-HLTH-{i:03d}",
             dataset="hidden",
-            family="refund_request",
-            variant="normal",
             input_payload={"customer_id": f"C-{i}"},
             world_state_seed=generate_world(seed=8000 + i),
             ground_truth={"expected_resolution": "refund"},

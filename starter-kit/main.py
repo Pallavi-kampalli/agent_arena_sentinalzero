@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 import agent
-from sdk.tools_client import ApiError, ArenaClient, ToolsClient, TransportError
+from sdk.tools_client import ApiError, ArenaClient, TransportError
 
 
 def validate_output_contract(output: Any) -> list[str]:
@@ -99,7 +99,7 @@ def main(
     print(f"Target Arena : {base_url}")
     print(f"Auth Token   : {token[:6]}***")
     print(f"Mode         : {mode.upper()}{' (Single Task)' if once and mode == 'practice' else ''}")
-    print(f"Sequential   : Yes (Protected against concurrency rate limits)")
+    print("Sequential   : Yes (Protected against concurrency rate limits)")
     if is_mock:
         print(f"Debug UI     : {base_url.rstrip('/')}/dashboard")
     print("=" * 65)
@@ -193,10 +193,10 @@ def main(
                     is_correct = bool(result.get("correct", False))
                     if is_correct:
                         passed_count += 1
-                        print(f"Mock Evaluation : [PASS] Ground truth matched perfectly!")
+                        print("Mock Evaluation : [PASS] Ground truth matched perfectly!")
                     else:
                         failed_count += 1
-                        print(f"Mock Evaluation : [FAIL]")
+                        print("Mock Evaluation : [FAIL]")
                         print(f"   Expected Res: {result.get('expected_resolution')}")
                         print(f"   Expected Ev:  {result.get('expected_evidence')}")
                         print(f"   Diff:         {result.get('diff_explanation')}")

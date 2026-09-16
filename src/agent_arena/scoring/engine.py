@@ -58,19 +58,48 @@ def count_duplicate_tool_calls(tool_logs: list[dict[str, Any]]) -> int:
 
 
 def score_task_success(
-    family: str,
-    variant: str,
-    runtime_state: dict[str, Any],
-    ground_truth: dict[str, Any],
+    *args: Any,
+    runtime_state: dict[str, Any] | None = None,
+    ground_truth: dict[str, Any] | None = None,
     world_seed: dict[str, Any] | None = None,
     submitted_resolution: str | None = None,
     submitted_escalation: bool | None = None,
+    family: str | None = None,
+    variant: str | None = None,
+    **kwargs: Any,
 ) -> float:
     """Evaluates whether the final world runtime state and decision match the expected ground truth.
 
     Exact state-match binary score: 1.0 or 0.0 (no partial credit).
     PRD §5: State diff against ground_truth.expected_end_state / expected_action.
     """
+    if args:
+        if len(args) >= 2 and isinstance(args[0], str) and isinstance(args[1], str):
+            if len(args) > 2 and runtime_state is None:
+                runtime_state = args[2]
+            if len(args) > 3 and ground_truth is None:
+                ground_truth = args[3]
+            if len(args) > 4 and world_seed is None:
+                world_seed = args[4]
+            if len(args) > 5 and submitted_resolution is None:
+                submitted_resolution = args[5]
+            if len(args) > 6 and submitted_escalation is None:
+                submitted_escalation = args[6]
+        elif len(args) >= 2:
+            if runtime_state is None:
+                runtime_state = args[0]
+            if ground_truth is None:
+                ground_truth = args[1]
+            if len(args) > 2 and world_seed is None:
+                world_seed = args[2]
+            if len(args) > 3 and submitted_resolution is None:
+                submitted_resolution = args[3]
+            if len(args) > 4 and submitted_escalation is None:
+                submitted_escalation = args[4]
+
+    runtime_state = runtime_state or {}
+    ground_truth = ground_truth or {}
+
     # 1. Decision resolution check
     expected_res = ground_truth.get("expected_resolution")
     if submitted_resolution is not None and expected_res is not None:
@@ -232,7 +261,7 @@ def score_policy(
     return float(c_enforcement * c_truthfulness)
 
 
-def score_robustness(task_variant: str, task_success_score: float) -> float:
+def score_robustness(task_variant: str | None = None, task_success_score: float = 0.0, **kwargs: Any) -> float:
     """Evaluates robustness per PRD §5.
 
     At task level, equals task_success (binary 0.0/1.0).

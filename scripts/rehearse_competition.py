@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
 from agent import solve as starter_kit_solve  # noqa: E402
 from sdk.tools_client import ToolsClient  # noqa: E402
 
+
 def solve_expert(task: dict[str, Any], tools: ToolsClient) -> dict[str, Any]:
     """Expert agent: actively inspects customer records, transactions, policies, and takes authorized actions."""
     customer_id = task.get("customer_id", "")

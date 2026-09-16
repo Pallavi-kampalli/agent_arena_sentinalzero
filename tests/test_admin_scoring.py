@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from conftest import generate_world
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +12,6 @@ from agent_arena.models.task import Task
 from agent_arena.models.team import Team
 from agent_arena.services.auth_service import hash_token
 from agent_arena.services.settings_service import SettingsService
-from conftest import generate_world
 
 
 @pytest.fixture
@@ -31,8 +31,6 @@ async def seeded_scoring_tasks(db_session: AsyncSession):
         task = Task(
             task_id=t_id,
             dataset="hidden",
-            family="refund_request",
-            variant="normal",
             input_payload={"customer_id": f"CUS-{i}", "customer_message": "Refund please"},
             world_state_seed=world,
             ground_truth={"expected_resolution": "refund", "must_escalate": False},

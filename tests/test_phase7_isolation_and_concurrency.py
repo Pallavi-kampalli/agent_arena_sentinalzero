@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from conftest import generate_world
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +16,6 @@ from agent_arena.scoring.service import ScoringService
 from agent_arena.services.auth_service import hash_token, register_team
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.tool_service import ToolService
-from conftest import generate_world
 
 
 @pytest.fixture
@@ -63,8 +63,6 @@ async def test_concurrent_double_refund_race(client: AsyncClient, db_session: As
     task = Task(
         task_id=f"TASK-REF-RACE-{uuid.uuid4().hex[:6]}",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": cust_id, "customer_message": "Refund please"},
         world_state_seed=world,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -141,8 +139,6 @@ async def test_concurrent_double_cancellation_race(client: AsyncClient, db_sessi
     task = Task(
         task_id=f"TASK-CAN-RACE-{uuid.uuid4().hex[:6]}",
         dataset="dev",
-        family="subscription_cancellation",
-        variant="normal",
         input_payload={"customer_id": cust_id, "customer_message": "Cancel please"},
         world_state_seed=world,
         ground_truth={"expected_resolution": "cancel", "must_escalate": False, "required_evidence": ["DOC-1002"]},
@@ -201,8 +197,6 @@ async def test_token_revocation_under_concurrent_load(client: AsyncClient, admin
     task = Task(
         task_id=f"TASK-REVOKE-{uuid.uuid4().hex[:6]}",
         dataset="hidden",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "C-01", "customer_message": "Hi"},
         world_state_seed=generate_world(seed=999),
         ground_truth={"expected_resolution": "refund", "must_escalate": False},
@@ -275,8 +269,6 @@ async def test_admin_scoreboard_strict_consistency(client: AsyncClient, admin_he
     task = Task(
         task_id=f"TASK-SCORE-CONSIST-{uuid.uuid4().hex[:6]}",
         dataset="hidden",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "C-01", "customer_message": "Hi"},
         world_state_seed=generate_world(seed=555),
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1"]},

@@ -1,6 +1,7 @@
 from typing import Any
 
 import pytest
+from conftest import generate_world
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +10,6 @@ from agent_arena.models.team import Team
 from agent_arena.models.tool_call_log import ToolCallLog
 from agent_arena.services.auth_service import register_team
 from agent_arena.services.settings_service import SettingsService
-from conftest import generate_world
 
 FORBIDDEN_GT_KEYS = {
     "ground_truth",
@@ -49,8 +49,6 @@ async def seeded_dataset(db_session: AsyncSession):
         task = Task(
             task_id=t_id,
             dataset="hidden",
-            family="refund_request",
-            variant="normal",
             input_payload={"customer_id": cust_id, "customer_message": "Need refund urgently"},
             world_state_seed=world,
             ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1"]},

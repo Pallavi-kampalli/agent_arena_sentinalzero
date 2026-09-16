@@ -1,4 +1,5 @@
 import pytest
+from conftest import generate_world
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,7 +7,6 @@ from agent_arena.models.task import Task
 from agent_arena.services.auth_service import register_team
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.tool_service import ToolService
-from conftest import generate_world
 
 
 @pytest.fixture
@@ -27,8 +27,6 @@ async def setup_team_and_task(db_session: AsyncSession):
     task = Task(
         task_id="TASK-READ-001",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-1001", "customer_message": "Please refund me."},
         world_state_seed=world,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},

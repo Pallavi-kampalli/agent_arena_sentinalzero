@@ -4,10 +4,8 @@ import socket
 import sys
 import threading
 import time
-import unittest.mock
 import uuid
 from pathlib import Path
-from typing import Any
 
 import httpx
 import pytest
@@ -21,6 +19,7 @@ sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
 sys.path.insert(0, str(ROOT_DIR / "starter-kit" / "mock_simulator"))
 
 from agent import solve as starter_kit_solve  # noqa: E402
+from conftest import generate_world  # noqa: E402
 from sdk.tools_client import ToolsClient  # noqa: E402
 from server import app as mock_app  # noqa: E402
 from server import init_db as mock_init_db  # noqa: E402
@@ -34,7 +33,6 @@ from agent_arena.models.team import Team  # noqa: E402
 from agent_arena.models.tool_call_log import ToolCallLog  # noqa: E402
 from agent_arena.services.auth_service import create_bearer_token, hash_token  # noqa: E402
 from agent_arena.services.settings_service import SettingsService  # noqa: E402
-from conftest import generate_world  # noqa: E402
 
 
 def get_free_port() -> int:
@@ -236,8 +234,6 @@ async def prod_team_and_task(prod_server):
         task = Task(
             task_id=task_id,
             dataset="hidden",
-            family="refund_request",
-            variant="normal",
             input_payload={
                 "customer_id": "CUS-PROD-001",
                 "customer_message": "Please refund my transaction TXN-PROD-001 for 75.0 dollars.",

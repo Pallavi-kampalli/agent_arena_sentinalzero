@@ -1,5 +1,6 @@
 import pytest
 import sqlalchemy as sa
+from conftest import generate_world
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +10,6 @@ from agent_arena.models.tool_call_log import ToolCallLog
 from agent_arena.services.auth_service import register_team
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.tool_service import ToolService
-from conftest import generate_world
 
 
 @pytest.fixture
@@ -122,8 +122,6 @@ async def setup_action_world(db_session: AsyncSession):
     task = Task(
         task_id="TASK-ACTION-001",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-ACTION-01", "customer_message": "Action test"},
         world_state_seed=world,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},

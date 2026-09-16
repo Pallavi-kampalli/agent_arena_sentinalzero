@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from conftest import generate_world
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +10,6 @@ from agent_arena.models.task_assignment import TaskAssignment
 from agent_arena.services.auth_service import register_team
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.tool_service import ToolService
-from conftest import generate_world
 
 
 @pytest.mark.asyncio
@@ -80,8 +80,6 @@ async def test_cross_team_isolation(client: AsyncClient, db_session: AsyncSessio
     task_a = Task(
         task_id="TASK-ISO-A",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-SHARED-99", "customer_message": "A"},
         world_state_seed=world_a,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -89,8 +87,6 @@ async def test_cross_team_isolation(client: AsyncClient, db_session: AsyncSessio
     task_b = Task(
         task_id="TASK-ISO-B",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-SHARED-99", "customer_message": "B"},
         world_state_seed=world_b,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -181,8 +177,6 @@ async def test_concurrent_refund_attempts(client: AsyncClient, db_session: Async
     task = Task(
         task_id="TASK-RACE-01",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-RACE-01", "customer_message": "Race"},
         world_state_seed=world,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -234,8 +228,6 @@ async def test_dynamic_rate_limiter_setting(client: AsyncClient, db_session: Asy
     task = Task(
         task_id="TASK-THROTTLE-01",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-1001", "customer_message": "Hi"},
         world_state_seed=world,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -283,8 +275,6 @@ async def test_per_task_tool_call_budget(client: AsyncClient, db_session: AsyncS
     task = Task(
         task_id="TASK-BUDGET-01",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-1001", "customer_message": "Hi"},
         world_state_seed=world,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},

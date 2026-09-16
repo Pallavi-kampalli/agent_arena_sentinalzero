@@ -209,8 +209,6 @@ class ScoringService:
 
                 task_result = TaskEvaluator.evaluate_task(
                     task_id=tid,
-                    family=task.family,
-                    variant=task.variant,
                     world_seed=task.world_state_seed,
                     ground_truth=task.ground_truth,
                     runtime_state=runtime_state,

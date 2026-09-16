@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 import sqlalchemy as sa
+from conftest import generate_world
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +15,6 @@ from agent_arena.models.tool_call_log import ToolCallLog
 from agent_arena.services.auth_service import register_team
 from agent_arena.services.settings_service import SettingsService
 from agent_arena.services.tool_service import ToolService
-from conftest import generate_world
 
 
 @pytest.fixture
@@ -85,8 +85,6 @@ async def setup_adversarial_env(db_session: AsyncSession):
     task = Task(
         task_id="TASK-ADV-01",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-ADV-01", "customer_message": "Test"},
         world_state_seed=copy.deepcopy(world),
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -210,8 +208,6 @@ async def test_cross_task_identical_entities_full_isolation(client: AsyncClient,
     task1 = Task(
         task_id="TASK-SHARED-1",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-SHARED", "customer_message": "T1"},
         world_state_seed=world1,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -219,8 +215,6 @@ async def test_cross_task_identical_entities_full_isolation(client: AsyncClient,
     task2 = Task(
         task_id="TASK-SHARED-2",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-SHARED", "customer_message": "T2"},
         world_state_seed=world2,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -493,8 +487,6 @@ async def test_concurrency_rate_limit_race(client: AsyncClient, db_session: Asyn
     task = Task(
         task_id="TASK-RL-RACE",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": first_cust_id, "customer_message": "Hi"},
         world_state_seed=world,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -877,8 +869,6 @@ async def test_zero_token_leakage_in_tool_logs(client: AsyncClient, db_session: 
     task = Task(
         task_id="TASK-LEAK-01",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": first_cust_id, "customer_message": "Leak check"},
         world_state_seed=world,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
@@ -955,8 +945,6 @@ async def test_multi_session_row_locking_serialization(test_engine, db_session: 
     task = Task(
         task_id="TASK-MW-01",
         dataset="dev",
-        family="refund_request",
-        variant="normal",
         input_payload={"customer_id": "CUS-MW-01", "customer_message": "Race"},
         world_state_seed=world,
         ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},

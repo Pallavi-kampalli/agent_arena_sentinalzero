@@ -71,8 +71,6 @@ async def test_task_and_assignments(db_session: AsyncSession):
     task = Task(
         task_id="TASK-001",
         dataset="hidden",
-        family="duplicate_payment",
-        variant="adversarial",
         input_payload={"customer_message": "Double charged", "customer_id": "CUS-100"},
         world_state_seed={"customers": [{"id": "CUS-100"}]},
         ground_truth={"expected_end_state": {"refund": True}, "required_evidence": ["TXN-1"]},

@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT_DIR / "src"))
 sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
 
 from sdk.tools_client import ToolsClient  # noqa: E402
+
 from agent_arena.scoring.evaluator import TaskEvaluator  # noqa: E402
 
 
@@ -169,13 +170,11 @@ def naive_solve(task: dict[str, Any], tools: ToolsClient) -> dict[str, Any]:
 
 def create_test_task_fixture(
     task_id: str,
-    family: str,
-    variant: str,
     expected_res: str,
     req_evidence: list[str],
     has_chargeback_hold: bool = False,
 ) -> dict[str, Any]:
-    """Builds a standardized task fixture covering diverse families and variants."""
+    """Builds a standardized task fixture."""
     cust_id = f"CUS-{task_id}"
     txn_id = f"TXN-{task_id}"
     doc_id = f"DOC-{task_id}"
@@ -236,8 +235,6 @@ def create_test_task_fixture(
 
     return {
         "task_id": task_id,
-        "family": family,
-        "variant": variant,
         "world_seed": world_state,
         "input_payload": {
             "customer_id": cust_id,
@@ -263,16 +260,16 @@ def test_agent_quality_differential_distributional_analysis():
     4. Evaluator remains robust and crash-free even on pathological naive agent responses.
     """
     tasks = [
-        create_test_task_fixture("T1", "refund_request", "normal", "refund", ["TXN-T1", "DOC-T1"]),
-        create_test_task_fixture("T2", "refund_request", "distractor", "refund", ["TXN-T2", "DOC-T2"]),
+        create_test_task_fixture("T1", "refund", ["TXN-T1", "DOC-T1"]),
+        create_test_task_fixture("T2", "refund", ["TXN-T2", "DOC-T2"]),
         create_test_task_fixture(
-            "T3", "refund_request", "adversarial", "escalate", ["TXN-T3", "DOC-T3"], has_chargeback_hold=True
+            "T3", "escalate", ["TXN-T3", "DOC-T3"], has_chargeback_hold=True
         ),
         create_test_task_fixture(
-            "T4", "refund_request", "contradiction", "escalate", ["TXN-T4", "DOC-T4"], has_chargeback_hold=True
+            "T4", "escalate", ["TXN-T4", "DOC-T4"], has_chargeback_hold=True
         ),
-        create_test_task_fixture("T5", "duplicate_payment", "missing_info", "refund", ["TXN-T5", "DOC-T5"]),
-        create_test_task_fixture("T6", "previous_agent_was_wrong", "stale", "refund", ["TXN-T6", "DOC-T6"]),
+        create_test_task_fixture("T5", "refund", ["TXN-T5", "DOC-T5"]),
+        create_test_task_fixture("T6", "refund", ["TXN-T6", "DOC-T6"]),
     ]
 
     ref_scores = []
@@ -365,8 +362,6 @@ def test_agent_quality_differential_distributional_analysis():
 
         ref_eval = TaskEvaluator.evaluate_task(
             task_id=t["task_id"],
-            family=t["family"],
-            variant=t["variant"],
             world_seed=t["world_seed"],
             ground_truth=t["ground_truth"],
             runtime_state=ref_runtime_state,
@@ -402,8 +397,6 @@ def test_agent_quality_differential_distributional_analysis():
 
         naive_eval = TaskEvaluator.evaluate_task(
             task_id=t["task_id"],
-            family=t["family"],
-            variant=t["variant"],
             world_seed=t["world_seed"],
             ground_truth=t["ground_truth"],
             runtime_state=naive_runtime_state,
@@ -454,15 +447,13 @@ def test_agent_quality_differential_distributional_analysis():
     assert statistics.mean(ref_task_success) > statistics.mean(naive_task_success)
     assert statistics.mean(ref_aggregate) > statistics.mean(naive_aggregate)
 
-    # 4. Robustness: Strong observed separation on non-normal variants (distractor, adversarial, contradiction, missing_info, stale)
-    non_normal_indices = [i for i, t in enumerate(tasks) if t["variant"] != "normal"]
-    ref_robustness = [ref_scores[i].robustness for i in non_normal_indices]
-    naive_robustness = [naive_scores[i].robustness for i in non_normal_indices]
+    # 4. Robustness: Strong observed separation
+    ref_robustness = [s.robustness for s in ref_scores]
+    naive_robustness = [s.robustness for s in naive_scores]
 
-    print("\n--- Non-Normal Variant Robustness Separation ---")
-    print(f"Non-normal variants evaluated: {[tasks[i]['variant'] for i in non_normal_indices]}")
-    print(f"Reference Mean Robustness (Non-Normal): {statistics.mean(ref_robustness):.3f}")
-    print(f"Naive Mean Robustness (Non-Normal):     {statistics.mean(naive_robustness):.3f}")
+    print("\n--- Robustness Separation ---")
+    print(f"Reference Mean Robustness: {statistics.mean(ref_robustness):.3f}")
+    print(f"Naive Mean Robustness:     {statistics.mean(naive_robustness):.3f}")
 
     assert statistics.mean(ref_robustness) > statistics.mean(naive_robustness)
     assert statistics.mean(ref_robustness) == 1.000

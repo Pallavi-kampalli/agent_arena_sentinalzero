@@ -54,8 +54,6 @@ def test_adversarial_fabricated_evidence_ids(mock_world_seed, mock_task_ground_t
 
     result = TaskEvaluator.evaluate_task(
         task_id="TASK-HIDDEN-001",
-        family="refund_request",
-        variant="normal",
         world_seed=mock_world_seed,
         ground_truth=mock_task_ground_truth,
         runtime_state=runtime_state,
@@ -89,8 +87,6 @@ def test_adversarial_sealed_timeout_is_zero(mock_world_seed, mock_task_ground_tr
 
     result = TaskEvaluator.evaluate_task(
         task_id="TASK-HIDDEN-001",
-        family="refund_request",
-        variant="normal",
         world_seed=mock_world_seed,
         ground_truth=mock_task_ground_truth,
         runtime_state=runtime_state,
@@ -114,8 +110,6 @@ def test_adversarial_unstarted_task_is_zero(mock_world_seed, mock_task_ground_tr
     """Task never started must yield 0.0 across all dimensions."""
     result = TaskEvaluator.evaluate_task(
         task_id="TASK-HIDDEN-002",
-        family="refund_request",
-        variant="normal",
         world_seed=mock_world_seed,
         ground_truth=mock_task_ground_truth,
         runtime_state=None,
@@ -176,8 +170,6 @@ def test_adversarial_lying_about_resolution(mock_world_seed):
 
     result = TaskEvaluator.evaluate_task(
         task_id="TASK-HIDDEN-003",
-        family="refund_request",
-        variant="adversarial",
         world_seed=mock_world_seed,
         ground_truth=ground_truth,
         runtime_state=runtime_state,
@@ -232,8 +224,6 @@ def test_adversarial_boundary_confidence_values(mock_world_seed, mock_task_groun
     }
     res_0 = TaskEvaluator.evaluate_task(
         task_id="TASK-HIDDEN-001",
-        family="refund_request",
-        variant="normal",
         world_seed=mock_world_seed,
         ground_truth=mock_task_ground_truth,
         runtime_state=runtime_state,
@@ -258,8 +248,6 @@ def test_adversarial_boundary_confidence_values(mock_world_seed, mock_task_groun
     }
     res_1 = TaskEvaluator.evaluate_task(
         task_id="TASK-HIDDEN-001",
-        family="refund_request",
-        variant="normal",
         world_seed=mock_world_seed,
         ground_truth=mock_task_ground_truth,
         runtime_state=runtime_state,

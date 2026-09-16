@@ -106,8 +106,6 @@ class TaskEvaluator:
 
         # A. Task Success
         s_success = score_task_success(
-            family=family,
-            variant=variant,
             runtime_state=effective_runtime_state,
             ground_truth=ground_truth,
             submitted_resolution=submitted_res,
@@ -126,7 +124,6 @@ class TaskEvaluator:
 
         # C. Robustness
         s_robustness = score_robustness(
-            task_variant=variant,
             task_success_score=s_success,
         )
 
