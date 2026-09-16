@@ -28,13 +28,19 @@ Admin endpoints are secured independently from participant JWTs:
 
 ### 3.1 Overview & System Health
 - **`GET /admin/health`**:
-  Returns operational status including database connectivity, total registered teams, active submissions count, hidden benchmark tasks pool size, and task pool exhaustion alerts.
+  Returns operational status including database connectivity, total registered teams, active submissions count, hidden benchmark tasks pool size (30 tasks), and task pool exhaustion alerts.
 - **`GET /admin/dashboard`**:
-  Lightweight, single-page responsive operational dashboard UI for operators, featuring live metrics, team controls, and log inspect modals.
+  Lightweight, single-page responsive operational dashboard UI for operators, featuring live metrics, 5-digit team code management (`T-10001`), team registration modal (`#team-modal`), 1-click clipboard credential copy modal (`#token-modal`), and submission audit inspection modal (`#submission-modal`).
 
 ### 3.2 Team Management
 - **`POST /admin/teams`**:
-  Registers an individual team. Returns `team_id`, initial `token_version`, raw `token`, and a ready-to-use `.env` snippet formatted with `AGENT_ARENA_BASE_URL`, `AGENT_ARENA_TEAM_ID`, and `AGENT_ARENA_BEARER_TOKEN`.
+  Registers an individual team. Returns `team_id`, sequential `display_id` (e.g. `10001`), formatted `team_code` (`T-10001`), initial `token_version`, raw `token`, and a ready-to-use clean `.env` snippet formatted with:
+  ```ini
+  SUBMISSION_ARENA_URL=http://localhost:8000
+  SUBMISSION_TEAM_ID=<team_id>
+  SUBMISSION_TEAM_CODE=T-10001
+  SUBMISSION_BEARER_TOKEN=<raw_jwt_token>
+  ```
 - **`POST /admin/teams/bulk-import`**:
   Accepts CSV data (required header: `team_name`, optional: `member_names`, `member_emails`, `github_repo_url`). Automatically creates teams, safely skips pre-existing names, and returns generated credentials.
 - **`GET /admin/teams`**:

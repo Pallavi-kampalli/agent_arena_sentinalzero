@@ -4,11 +4,11 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16--alpine-336791.svg)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
-[![Tests](https://img.shields.io/badge/Tests-235%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-195%20Passed-brightgreen.svg)]()
 
-**Agent Arena** is a competition platform designed to benchmark autonomous AI customer support agents on complex, stateful customer support operations tasks (**SupportOps**).
+**Agent Arena** is an enterprise-grade competition and evaluation platform designed to benchmark autonomous AI agents on complex, stateful customer support operations tasks (**SupportOps**).
 
-The platform evaluates autonomous agents across **6 task families** and **6 variant types** using **10 specialized read and action tools**, enforcing strict policy adherence, evidence grounding, transactional isolation, and multi-dimensional scoring under real-time concurrency.
+The platform evaluates autonomous agents across **30 canonical benchmark tasks** (5 per family across 6 families) using **10 specialized read and action tools**, enforcing strict policy adherence, evidence grounding, transactional isolation, upfront task delivery with ephemeral randomized IDs, and atomic batch submission under real-time concurrency.
 
 ---
 
@@ -108,47 +108,63 @@ Configuration is managed via environment variables (loaded from `.env` or contai
 
 Participants receive a clean-room, self-contained starter kit located in `starter-kit/`.
 
-### Zero-Config Setup
-Connecting an agent to the platform requires only two environment variables:
+### Dual-Mode Environment Setup
+The starter kit connects seamlessly to both the local mock simulator and the live arena platform via `.env`:
 ```env
-BASE_URL=http://localhost:8000
-BEARER_TOKEN=<team_bearer_token>
+# Practice Mode (Local Mock Simulator: http://127.0.0.1:8001)
+PRACTICE_ARENA_URL=http://127.0.0.1:8001
+PRACTICE_BEARER_TOKEN=dev-practice-token
+
+# Submission Mode (Live Arena Platform: http://localhost:8000)
+SUBMISSION_ARENA_URL=http://localhost:8000
+SUBMISSION_TEAM_ID=<team_id>
+SUBMISSION_TEAM_CODE=T-10001
+SUBMISSION_BEARER_TOKEN=<team_bearer_token>
 ```
 
 ### Running an Agent
+Participants implement their reasoning logic in `agent.py -> def solve(task, tools)` and execute `main.py`:
 ```bash
 cd starter-kit
 pip install -r requirements.txt
-python example_run.py
+
+# Mode A: Practice Mode (Local debugging with ground truth feedback)
+python main.py --mode practice --once         # Single task
+python main.py --mode practice --max-tasks 5  # Up to 5 tasks
+
+# Mode B: Submission Mode (Official competition epoch)
+python main.py --mode submission              # Solves all 30 tasks sequentially & submits atomically in batch
 ```
 
 ### Offline Practice Mode (Mock Simulator)
 Participants can practice offline against the standalone mock simulator before competing against the live platform:
 ```bash
-python starter-kit/mock_simulator/server.py --port 8000
+python starter-kit/mock_simulator/server.py --port 8001
 ```
+The simulator hosts a live visual debugging dashboard at `http://127.0.0.1:8001/dashboard`.
 
 ---
 
 ## 5. Admin Control Plane
 
-Platform operators manage teams, monitor tasks, view audit logs, adjust settings, and inspect live standings via the Admin Control Plane (`/admin/*`).
+Platform operators manage teams, monitor tasks, view audit logs, adjust settings, and inspect live standings via the Admin Control Plane (`/admin/*`) or the interactive dashboard at `http://localhost:8000/admin/dashboard`.
 
-All admin routes require administrative authentication via header:
+All admin routes require administrative authentication:
 ```bash
-curl -H "X-Admin-Secret: dev-admin-secret-key-32-chars-min-for-agent-arena" \
+curl -H "Authorization: Bearer <ADMIN_PANEL_SECRET>" \
   http://localhost:8000/admin/health
 ```
 
-### Key Admin Endpoints
-- `GET /admin/health`: System health and task pool monitoring.
-- `POST /admin/teams`: Register a team and issue initial bearer token.
+### Key Admin Capabilities
+- `GET /admin/health`: System health, task pool monitoring (30 hidden benchmark tasks), and active teams count.
+- `POST /admin/teams`: Register a team, allocate an incremental 5-digit team code (`T-10001`), and generate a ready-to-copy `.env` snippet.
 - `POST /admin/teams/bulk-import`: Bulk import teams from CSV.
 - `GET /admin/leaderboard`: Live calculated competition standings with 4-tier tiebreaker logic.
 - `GET /admin/leaderboard/export`: Export official standings as RFC 4180 CSV.
-- `GET /admin/settings`: View dynamic competition settings.
+- `GET /admin/settings`: View dynamic competition settings (`hidden_task_count=30`, scoring weights).
 - `PUT /admin/settings/{key}`: Dynamically update settings with immutable audit logging.
-- `GET /admin/competition/phase`: Current competition phase and valid monotonic transitions.
+- `GET /admin/submissions`: List submissions and inspect multi-dimensional score breakdowns.
+- `GET /admin/dashboard`: Single-page operator UI with team registration modal, token copy modal, submission detail auditor, and clean leaderboard.
 
 For comprehensive admin documentation, see [ADMIN_GUIDE.md](file:///docs/ADMIN_GUIDE.md).
 
@@ -157,9 +173,9 @@ For comprehensive admin documentation, see [ADMIN_GUIDE.md](file:///docs/ADMIN_G
 ## 6. Testing & Quality Assurance
 
 ### Test Suite Execution
-The repository maintains a sealed test baseline of **235 tests** covering the entire platform:
+The repository maintains a sealed test baseline of **195 tests** covering the entire platform:
 ```bash
-pytest -q -W error
+uv run pytest
 ```
 
 ### Reverse-Order Verification
@@ -233,3 +249,17 @@ The platform consists of the following core production subsystems:
 ```
 
 *Note: Remote/cloud deployment (e.g. public DNS, TLS reverse proxies, Kubernetes) is intentionally deferred. The local production-grade architecture serves as the authoritative, reproducible baseline.*
+
+---
+
+## 9. Adapting Agent Arena for New Problem Statements
+
+Want to use this competition engine as the foundational template for another AI benchmark, hackathon challenge, or evaluation domain (e.g., DevOps, Financial Operations, Healthcare, Legal Discovery, Cybersecurity Incident Response)?
+
+Consult the comprehensive file-by-file adaptation guide:
+📖 **[docs/ADAPTATION_GUIDE.md](file:///docs/ADAPTATION_GUIDE.md)**
+
+This guide provides an exhaustive file-by-file blueprint detailing:
+- **What to Change**: Domain data catalogs, tool definitions, task generation, scoring rules, participant output contracts, and SDK methods.
+- **What NOT to Change**: Battle-tested concurrency mutexes, row-level locks, JWT authentication, token revocation, atomic batch submission pipeline, live dashboard UI, Alembic migrations, and Docker lifecycle.
+- **Step-by-Step Customization Checklist**: A 10-step protocol to spin up a brand new AI benchmark arena in hours.

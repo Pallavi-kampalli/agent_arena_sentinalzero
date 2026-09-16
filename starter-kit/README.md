@@ -208,12 +208,11 @@ Designed for interactive testing and local debugging:
 
 #### Mode B: Submission Mode (`--mode submission`)
 Designed for full competition epoch execution:
-- Initializes a submission run with the API.
-- Loops through all tasks sequentially without artificial delays (rate limit safe).
-- Solves each task, submits the decision to unlock the next task, and collects answers in memory.
-- Finalizes the submission run upon completing the epoch.
-- In mock simulator (30 tasks): displays total accuracy score (e.g. `25/30 tasks correct (83.3%)`).
-- In live arena (60 tasks): finalizes the official submission run.
+- Initializes a submission run with the Live Arena API (`POST /submission/start`).
+- Receives all **30 benchmark tasks** upfront in randomized order with ephemeral IDs.
+- Solves each task sequentially in memory with active `X-Task-ID` tool calls (rate-limit safe).
+- Submits all 30 task solutions in a single atomic batch (`POST /submission/{id}/submit`).
+- Auto-timeout protection: submissions taking >30 minutes or interrupted by critical errors are marked `interrupted` and not penalized.
 - CLI example:
   ```bash
   python main.py --mode submission
