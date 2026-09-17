@@ -22,74 +22,22 @@ async def test_cross_team_isolation(client: AsyncClient, db_session: AsyncSessio
     team_a, token_a = await register_team(db_session, "TeamAlpha")
     team_b, token_b = await register_team(db_session, "TeamBeta")
 
-    # 2. Build world with identical customer and transaction IDs
     world_a = generate_world(seed=42)
-    world_a["customers"].append(
-        {
-            "id": "CUS-SHARED-99",
-            "name": "Alpha Customer",
-            "tier": "pro",
-            "region": "NA",
-            "verification_status": "verified",
-            "account_status": "active",
-            "created_at": "2026-01-01T00:00:00Z",
-        }
-    )
-    world_a["transactions"].append(
-        {
-            "id": "TXN-SHARED-99",
-            "customer_id": "CUS-SHARED-99",
-            "amount": 100.0,
-            "currency": "USD",
-            "date": "2026-09-12T00:00:00Z",
-            "status": "completed",
-            "chargeback_status": "none",
-            "under_fraud_investigation": False,
-            "refund_status": "none",
-            "refunded_amount": 0.0,
-        }
-    )
-
     world_b = generate_world(seed=42)
-    world_b["customers"].append(
-        {
-            "id": "CUS-SHARED-99",
-            "name": "Beta Customer",
-            "tier": "enterprise",
-            "region": "EU",
-            "verification_status": "verified",
-            "account_status": "active",
-            "created_at": "2026-01-01T00:00:00Z",
-        }
-    )
-    world_b["transactions"].append(
-        {
-            "id": "TXN-SHARED-99",
-            "customer_id": "CUS-SHARED-99",
-            "amount": 100.0,
-            "currency": "USD",
-            "date": "2026-09-12T00:00:00Z",
-            "status": "completed",
-            "chargeback_status": "none",
-            "under_fraud_investigation": False,
-            "refund_status": "none",
-            "refunded_amount": 0.0,
-        }
-    )
 
     task_a = Task(
         task_id="TASK-ISO-A",
-        dataset="dev",
-        input_payload={"customer_id": "CUS-SHARED-99", "customer_message": "A"},
+        dataset="hidden",
+        input_payload={"message_id": "MSG-SHARED-99", "sender": "alice@sentinel-acme.edu"},
         world_state_seed=world_a,
-        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+        ground_truth={"expected_resolution": "quarantine"},
     )
     task_b = Task(
         task_id="TASK-ISO-B",
-        dataset="dev",
-        input_payload={"customer_id": "CUS-SHARED-99", "customer_message": "B"},
+        dataset="hidden",
+        input_payload={"message_id": "MSG-SHARED-99", "sender": "alice@sentinel-acme.edu"},
         world_state_seed=world_b,
-        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+        ground_truth={"expected_resolution": "quarantine"},
     )
 
     db_session.add(task_a)
@@ -100,86 +48,57 @@ async def test_cross_team_isolation(client: AsyncClient, db_session: AsyncSessio
     await tool_service.assign_task(team_a.team_id, "TASK-ISO-A")
     assign_b = await tool_service.assign_task(team_b.team_id, "TASK-ISO-B")
 
-    headers_a = {"Authorization": f"Bearer {token_a}"}
-    headers_b = {"Authorization": f"Bearer {token_b}"}
+    headers_a = {"Authorization": f"Bearer {token_a}", "X-Task-ID": "TASK-ISO-A"}
+    headers_b = {"Authorization": f"Bearer {token_b}", "X-Task-ID": "TASK-ISO-B"}
 
-    # 3. Team A reads customer CUS-SHARED-99 -> gets "Alpha Customer"
-    resp_a_cust = await client.post("/tools/get_customer", json={"customer_id": "CUS-SHARED-99"}, headers=headers_a)
+    # 3. Team A reads directory
+    resp_a_cust = await client.post("/tools/lookup_directory", json={"identifier": "alice@sentinel-acme.edu"}, headers=headers_a)
     assert resp_a_cust.status_code == 200
-    assert resp_a_cust.json()["customer"]["name"] == "Alpha Customer"
 
-    # Team B reads customer CUS-SHARED-99 -> gets "Beta Customer"
-    resp_b_cust = await client.post("/tools/get_customer", json={"customer_id": "CUS-SHARED-99"}, headers=headers_b)
+    # Team B reads directory
+    resp_b_cust = await client.post("/tools/lookup_directory", json={"identifier": "alice@sentinel-acme.edu"}, headers=headers_b)
     assert resp_b_cust.status_code == 200
-    assert resp_b_cust.json()["customer"]["name"] == "Beta Customer"
 
-    # 4. Team A refunds TXN-SHARED-99
+    # 4. Team A quarantines MSG-SHARED-99
     resp_a_ref = await client.post(
-        "/tools/issue_refund",
-        json={"transaction_id": "TXN-SHARED-99", "amount": 100.0, "reason": "Team A refund"},
+        "/tools/quarantine_message",
+        json={"message_id": "MSG-SHARED-99", "reason": "Team A quarantine"},
         headers=headers_a,
     )
     assert resp_a_ref.status_code == 200
-    assert resp_a_ref.json()["status"] == "refunded"
+    assert resp_a_ref.json()["status"] == "quarantined"
 
-    # 5. Verify Team B's transaction TXN-SHARED-99 remains UNMUTATED ("none")
+    # 5. Verify Team B's world state remains UNMUTATED by Team A's action
     assign_b_id = assign_b.id
     db_session.expire_all()
     assign_b_db = await db_session.get(TaskAssignment, assign_b_id)
-    tx_b = next(t for t in assign_b_db.world_runtime_state["transactions"] if t["id"] == "TXN-SHARED-99")
-    assert tx_b["refund_status"] == "none"
-    assert tx_b["refunded_amount"] == 0.0
+    assert assign_b_db.world_runtime_state.get("delivery_status") != "quarantined"
 
-    # Team B can still refund its own TXN-SHARED-99
+    # Team B can still process its own MSG-SHARED-99
     resp_b_ref = await client.post(
-        "/tools/issue_refund",
-        json={"transaction_id": "TXN-SHARED-99", "amount": 100.0, "reason": "Team B refund"},
+        "/tools/quarantine_message",
+        json={"message_id": "MSG-SHARED-99", "reason": "Team B quarantine"},
         headers=headers_b,
     )
     assert resp_b_ref.status_code == 200
-    assert resp_b_ref.json()["status"] == "refunded"
+    assert resp_b_ref.json()["status"] == "quarantined"
 
 
 @pytest.mark.asyncio
-async def test_concurrent_refund_attempts(client: AsyncClient, db_session: AsyncSession):
-    """Verify concurrent refund requests for the same transaction serialize correctly (no double refunds)."""
+async def test_concurrent_quarantine_attempts(client: AsyncClient, db_session: AsyncSession):
+    """Verify concurrent quarantine requests for the same message serialize and complete idempotently."""
     settings_service = SettingsService(db_session)
     await settings_service.seed_defaults()
 
     team, token = await register_team(db_session, "RaceTeam")
     world = generate_world(seed=42)
-    world["customers"].append(
-        {
-            "id": "CUS-RACE-01",
-            "name": "Race User",
-            "tier": "pro",
-            "region": "NA",
-            "verification_status": "verified",
-            "account_status": "active",
-            "created_at": "2026-01-01T00:00:00Z",
-        }
-    )
-    world["transactions"].append(
-        {
-            "id": "TXN-RACE-01",
-            "customer_id": "CUS-RACE-01",
-            "amount": 100.0,
-            "currency": "USD",
-            "date": "2026-09-12T00:00:00Z",
-            "status": "completed",
-            "chargeback_status": "none",
-            "under_fraud_investigation": False,
-            "refund_status": "none",
-            "refunded_amount": 0.0,
-        }
-    )
 
     task = Task(
         task_id="TASK-RACE-01",
-        dataset="dev",
-        input_payload={"customer_id": "CUS-RACE-01", "customer_message": "Race"},
+        dataset="hidden",
+        input_payload={"message_id": "MSG-RACE-01", "sender": "attacker@evil.example"},
         world_state_seed=world,
-        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+        ground_truth={"expected_resolution": "quarantine"},
     )
     db_session.add(task)
     await db_session.commit()
@@ -187,34 +106,27 @@ async def test_concurrent_refund_attempts(client: AsyncClient, db_session: Async
     tool_service = ToolService(db_session, settings_service)
     assignment = await tool_service.assign_task(team.team_id, "TASK-RACE-01")
 
-    headers = {"Authorization": f"Bearer {token}"}
-    req_body = {"transaction_id": "TXN-RACE-01", "amount": 100.0, "reason": "Concurrent race test"}
+    headers = {"Authorization": f"Bearer {token}", "X-Task-ID": "TASK-RACE-01"}
+    req_body = {"message_id": "MSG-RACE-01", "reason": "Concurrent race test"}
 
     # Issue 2 concurrent requests
     resps = await asyncio.gather(
-        client.post("/tools/issue_refund", json=req_body, headers=headers),
-        client.post("/tools/issue_refund", json=req_body, headers=headers),
+        client.post("/tools/quarantine_message", json=req_body, headers=headers),
+        client.post("/tools/quarantine_message", json=req_body, headers=headers),
     )
 
     statuses = [r.status_code for r in resps]
     assert all(s == 200 for s in statuses)
 
     results = [r.json() for r in resps]
-    successes = [r for r in results if r.get("status") == "refunded"]
-    rejections = [r for r in results if r.get("error") == "INELIGIBLE"]
+    successes = [r for r in results if r.get("status") == "quarantined"]
+    assert len(successes) >= 1
 
-    # Exactly one refund succeeds, and exactly one is rejected with already_refunded
-    assert len(successes) == 1
-    assert len(rejections) == 1
-    assert rejections[0]["reason"] == "already_refunded"
-
-    # Verify final database state has refunded_amount == 100.0 (not 200.0)
+    # Verify final database state has delivery_status == quarantined
     assignment_id = assignment.id
     db_session.expire_all()
     assign_db = await db_session.get(TaskAssignment, assignment_id)
-    tx = next(t for t in assign_db.world_runtime_state["transactions"] if t["id"] == "TXN-RACE-01")
-    assert tx["refund_status"] == "refunded"
-    assert tx["refunded_amount"] == 100.0
+    assert assign_db.world_runtime_state.get("delivery_status") == "quarantined"
 
 
 @pytest.mark.asyncio
@@ -227,10 +139,10 @@ async def test_dynamic_rate_limiter_setting(client: AsyncClient, db_session: Asy
     world = generate_world(seed=42)
     task = Task(
         task_id="TASK-THROTTLE-01",
-        dataset="dev",
-        input_payload={"customer_id": "CUS-1001", "customer_message": "Hi"},
+        dataset="hidden",
+        input_payload={"message_id": "MSG-01", "sender": "alice@sentinel-acme.edu"},
         world_state_seed=world,
-        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+        ground_truth={"expected_resolution": "allow"},
     )
     db_session.add(task)
     await db_session.commit()
@@ -241,18 +153,18 @@ async def test_dynamic_rate_limiter_setting(client: AsyncClient, db_session: Asy
     # Set rate limit to 2 calls per minute
     await settings_service.set("rate_limit_tool_calls_per_min", 2)
 
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {token}", "X-Task-ID": "TASK-THROTTLE-01"}
 
     # Call 1: Success
-    r1 = await client.post("/tools/get_customer", json={"customer_id": "CUS-1001"}, headers=headers)
+    r1 = await client.post("/tools/lookup_directory", json={"identifier": "alice@sentinel-acme.edu"}, headers=headers)
     assert r1.status_code == 200
 
     # Call 2: Success
-    r2 = await client.post("/tools/get_customer", json={"customer_id": "CUS-1001"}, headers=headers)
+    r2 = await client.post("/tools/lookup_directory", json={"identifier": "alice@sentinel-acme.edu"}, headers=headers)
     assert r2.status_code == 200
 
     # Call 3: Throttled (429 Rate Limit Exceeded)
-    r3 = await client.post("/tools/get_customer", json={"customer_id": "CUS-1001"}, headers=headers)
+    r3 = await client.post("/tools/lookup_directory", json={"identifier": "alice@sentinel-acme.edu"}, headers=headers)
     assert r3.status_code == 429
     assert r3.json()["detail"]["error"] == "RATE_LIMIT_EXCEEDED"
 
@@ -260,7 +172,7 @@ async def test_dynamic_rate_limiter_setting(client: AsyncClient, db_session: Asy
     await settings_service.set("rate_limit_tool_calls_per_min", 10)
 
     # Call 4: Now succeeds immediately without redeployment!
-    r4 = await client.post("/tools/get_customer", json={"customer_id": "CUS-1001"}, headers=headers)
+    r4 = await client.post("/tools/lookup_directory", json={"identifier": "alice@sentinel-acme.edu"}, headers=headers)
     assert r4.status_code == 200
 
 
@@ -274,10 +186,10 @@ async def test_per_task_tool_call_budget(client: AsyncClient, db_session: AsyncS
     world = generate_world(seed=42)
     task = Task(
         task_id="TASK-BUDGET-01",
-        dataset="dev",
-        input_payload={"customer_id": "CUS-1001", "customer_message": "Hi"},
+        dataset="hidden",
+        input_payload={"message_id": "MSG-01", "sender": "alice@sentinel-acme.edu"},
         world_state_seed=world,
-        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+        ground_truth={"expected_resolution": "allow"},
     )
     db_session.add(task)
     await db_session.commit()
@@ -290,14 +202,14 @@ async def test_per_task_tool_call_budget(client: AsyncClient, db_session: AsyncS
     # Ensure rate limit doesn't interfere
     await settings_service.set("rate_limit_tool_calls_per_min", 100)
 
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {token}", "X-Task-ID": "TASK-BUDGET-01"}
 
     # Calls 1, 2, 3 succeed
     for _ in range(3):
-        res = await client.post("/tools/get_customer", json={"customer_id": "CUS-1001"}, headers=headers)
+        res = await client.post("/tools/lookup_directory", json={"identifier": "alice@sentinel-acme.edu"}, headers=headers)
         assert res.status_code == 200
 
     # Call 4: Exceeds budget
-    r4 = await client.post("/tools/get_customer", json={"customer_id": "CUS-1001"}, headers=headers)
+    r4 = await client.post("/tools/lookup_directory", json={"identifier": "alice@sentinel-acme.edu"}, headers=headers)
     assert r4.status_code == 429
     assert r4.json()["detail"]["error"] == "BUDGET_EXCEEDED"

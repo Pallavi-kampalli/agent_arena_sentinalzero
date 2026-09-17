@@ -1,0 +1,198 @@
+TEST: tests/test_adversarial_hardening.py::test_cross_task_identical_entities_full_isolation
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert None is not None
+TEST: short test summary info========================
+  FAILED tests/test_adversarial_hardening.py::test_cross_task_identical_entities_full_isolation
+TEST: 1 failed in 0.51s===========================
+TEST: tests/test_adversarial_hardening.py::test_seed_immutability_across_actions
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   AttributeError: 'NoneType' object has no attribute 'world_state_seed'
+TEST: short test summary info========================
+  FAILED tests/test_adversarial_hardening.py::test_seed_immutability_across_actions
+TEST: 1 failed in 0.21s===========================
+TEST: tests/test_adversarial_hardening.py::test_zero_mutation_on_rejected_actions
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert None is not None
+TEST: short test summary info========================
+  FAILED tests/test_adversarial_hardening.py::test_zero_mutation_on_rejected_actions
+TEST: 1 failed in 0.20s===========================
+TEST: tests/test_adversarial_hardening.py::test_immediate_token_revocation_no_cache
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 404 == 200
+  E    +  where 404 = <Response [404 Not Found]>.status_code
+TEST: short test summary info========================
+  FAILED tests/test_adversarial_hardening.py::test_immediate_token_revocation_no_cache
+TEST: 1 failed in 0.21s===========================
+TEST: tests/test_adversarial_hardening.py::test_database_failure_injection_rollback
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   AttributeError: 'NoneType' object has no attribute 'world_runtime_state'
+TEST: short test summary info========================
+  FAILED tests/test_adversarial_hardening.py::test_database_failure_injection_rollback
+TEST: 1 failed in 0.21s===========================
+TEST: tests/test_competition_e2e.py::test_e2e_starter_kit_agent_against_mock
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   sdk.tools_client.ApiError: API error 404: {'detail': 'Not Found'}
+TEST: short test summary info========================
+  FAILED tests/test_competition_e2e.py::test_e2e_starter_kit_agent_against_mock
+TEST: 1 failed in 1.38s===========================
+TEST: tests/test_concurrency_and_isolation.py::test_cross_team_isolation
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 404 == 200
+  E    +  where 404 = <Response [404 Not Found]>.status_code
+TEST: short test summary info========================
+  FAILED tests/test_concurrency_and_isolation.py::test_cross_team_isolation - a...
+TEST: 1 failed in 0.21s===========================
+TEST: tests/test_concurrency_and_isolation.py::test_concurrent_refund_attempts
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert False
+  E    +  where False = all(<generator object test_concurrent_refund_attempts.<locals>.<genexpr> at 0x000001F041581700>)
+TEST: short test summary info========================
+  FAILED tests/test_concurrency_and_isolation.py::test_concurrent_refund_attempts
+TEST: 1 failed in 0.20s===========================
+TEST: tests/test_concurrency_and_isolation.py::test_dynamic_rate_limiter_setting
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 404 == 200
+  E    +  where 404 = <Response [404 Not Found]>.status_code
+TEST: short test summary info========================
+  FAILED tests/test_concurrency_and_isolation.py::test_dynamic_rate_limiter_setting
+TEST: 1 failed in 0.19s===========================
+TEST: tests/test_concurrency_and_isolation.py::test_per_task_tool_call_budget
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 404 == 200
+  E    +  where 404 = <Response [404 Not Found]>.status_code
+TEST: short test summary info========================
+  FAILED tests/test_concurrency_and_isolation.py::test_per_task_tool_call_budget
+TEST: 1 failed in 0.19s===========================
+TEST: tests/test_cross_lifecycle_races.py::test_model_b_task_reuse_across_teams
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 404 == 200
+  E    +  where 404 = <Response [404 Not Found]>.status_code
+TEST: short test summary info========================
+  FAILED tests/test_cross_lifecycle_races.py::test_model_b_task_reuse_across_teams
+TEST: 1 failed in 0.27s===========================
+TEST: tests/test_dataset_service.py::test_dataset_service_dev_rejected
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   Failed: DID NOT RAISE any of (ValueError, Exception)
+TEST: short test summary info========================
+  FAILED tests/test_dataset_service.py::test_dataset_service_dev_rejected - Fai...
+TEST: 1 failed in 0.11s===========================
+TEST: tests/test_e2e_starter_kit.py::test_starter_agent_end_to_end_against_mock
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   sdk.tools_client.ApiError: API error 404: {'detail': 'Not Found'}
+TEST: short test summary info========================
+  FAILED tests/test_e2e_starter_kit.py::test_starter_agent_end_to_end_against_mock
+TEST: 1 failed in 0.94s===========================
+TEST: tests/test_e2e_starter_kit.py::test_naive_agent_fails_naturally_without_environment_crash
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   Failed: DID NOT RAISE ApiError
+TEST: short test summary info========================
+  FAILED tests/test_e2e_starter_kit.py::test_naive_agent_fails_naturally_without_environment_crash
+TEST: 1 failed in 0.91s===========================
+TEST: tests/test_participant_sdk.py::test_sdk_read_tools
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   AssertionError: expected call not found.
+  E   Expected: post('/tools/search_knowledge', json={'query': 'refund policy', 'top_k': 3})
+  E     Actual: post('/tools/get_approved_domains', json={})
+TEST: short test summary info========================
+  FAILED tests/test_participant_sdk.py::test_sdk_read_tools - AssertionError: e...
+TEST: 1 failed in 0.52s===========================
+TEST: tests/test_participant_sdk.py::test_sdk_preserves_domain_rejections
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   TypeError: ToolsClient.issue_refund() takes 1 positional argument but 4 were given
+TEST: short test summary info========================
+  FAILED tests/test_participant_sdk.py::test_sdk_preserves_domain_rejections - ...
+TEST: 1 failed in 0.47s===========================
+TEST: tests/test_reference_vs_naive.py::test_agent_quality_differential_distributional_analysis
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 0.0 > 0.0
+  E    +  where 0.0 = <function mean at 0x000001F0415A7380>([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+  E    +    where <function mean at 0x000001F0415A7380> = statistics.mean
+  E    +  and   0.0 = <function mean at 0x000001F0415A7380>([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+  E    +    where <function mean at 0x000001F0415A7380> = statistics.mean
+TEST: short test summary info========================
+  FAILED tests/test_reference_vs_naive.py::test_agent_quality_differential_distributional_analysis
+TEST: 1 failed in 0.06s===========================
+TEST: tests/test_scoring_service.py::test_score_submission_full_flow
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 404 == 200
+  E    +  where 404 = <Response [404 Not Found]>.status_code
+TEST: short test summary info========================
+  FAILED tests/test_scoring_service.py::test_score_submission_full_flow - asser...
+TEST: 1 failed in 0.22s===========================
+TEST: tests/test_scoring_service.py::test_early_finalization_scaling_defense
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 0.0375 == 0.5 ± 0.05
+  E     
+  E     comparison failed
+  E     Obtained: 0.0375
+  E     Expected: 0.5 ± 0.05
+TEST: short test summary info========================
+  FAILED tests/test_scoring_service.py::test_early_finalization_scaling_defense
+TEST: 1 failed in 0.13s===========================
+TEST: tests/test_security_and_oracle.py::test_zero_oracle_leakage_participant_stack
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 404 == 200
+  E    +  where 404 = <Response [404 Not Found]>.status_code
+TEST: short test summary info========================
+  FAILED tests/test_security_and_oracle.py::test_zero_oracle_leakage_participant_stack
+TEST: 1 failed in 0.27s===========================
+TEST: tests/test_security_and_oracle.py::test_token_and_secret_hygiene_in_db_and_logs
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 0 >= 1
+  E    +  where 0 = len([])
+TEST: short test summary info========================
+  FAILED tests/test_security_and_oracle.py::test_token_and_secret_hygiene_in_db_and_logs
+TEST: 1 failed in 0.25s===========================
+TEST: tests/test_security_and_oracle.py::test_cross_team_tool_execution_rejection
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 404 == 200
+  E    +  where 404 = <Response [404 Not Found]>.status_code
+TEST: short test summary info========================
+  FAILED tests/test_security_and_oracle.py::test_cross_team_tool_execution_rejection
+TEST: 1 failed in 0.26s===========================
+TEST: tests/test_task_timing.py::test_task_time_budget_enforcement_and_auto_timeout
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert 404 == 409
+  E    +  where 404 = <Response [404 Not Found]>.status_code
+TEST: short test summary info========================
+  FAILED tests/test_task_timing.py::test_task_time_budget_enforcement_and_auto_timeout
+TEST: 1 failed in 0.27s===========================
+TEST: tests/test_team_isolation.py::test_concurrent_double_refund_race
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert False
+  E    +  where False = all(<generator object test_concurrent_double_refund_race.<locals>.<genexpr> at 0x000001F041AD2B50>)
+TEST: short test summary info========================
+  FAILED tests/test_team_isolation.py::test_concurrent_double_refund_race - ass...
+TEST: 1 failed in 0.21s===========================
+TEST: tests/test_team_isolation.py::test_concurrent_double_cancellation_race
+TEST: test session starts==========================
+TEST: FAILURES================================
+  E   assert False
+  E    +  where False = all(<generator object test_concurrent_double_cancellation_race.<locals>.<genexpr> at 0x000001F041BE7780>)
+TEST: short test summary info========================
+  FAILED tests/test_team_isolation.py::test_concurrent_double_cancellation_race
+TEST: 1 failed in 0.23s===========================

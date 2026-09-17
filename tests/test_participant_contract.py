@@ -1,3 +1,10 @@
+"""SentinelZero participant contract parity tests.
+
+Verifies that the production (src/agent_arena/domain/rules.py) and
+mock simulator (starter-kit/mock_simulator/server.py) domain logic
+are identical for all SentinelZero operations.
+"""
+
 import subprocess
 import sys
 from pathlib import Path
@@ -9,9 +16,7 @@ import pytest
 from agent_arena.api.app import app as prod_app
 from agent_arena.domain.rules import (
     apply_action_to_world,
-    check_cancellation_eligibility,
     check_escalation_validity,
-    check_refund_eligibility,
 )
 
 # Import mock simulator server
@@ -22,108 +27,35 @@ import server  # noqa: E402
 
 mock_app = server.app
 mock_apply_action = server.apply_action_to_world
-mock_check_cancellation = server.check_cancellation_eligibility
 mock_check_escalation = server.check_escalation_validity
-mock_check_refund = server.check_refund_eligibility
 
 
 @pytest.fixture
-def sample_world_state() -> dict[str, Any]:
+def sz_world_state() -> dict[str, Any]:
+    """A minimal SentinelZero world state matching the canonical format."""
     return {
         "current_date": "2026-09-15T00:00:00Z",
-        "customers": [
-            {"id": "CUS-100", "name": "Alice Smith", "tier": "gold"},
-            {"id": "CUS-200", "name": "Bob Jones", "tier": "standard"},
+        "target_message_id": "MSG-SENTINEL-001",
+        "directory": [
+            {"id": "EMP-001", "name": "Alice Smith", "official_email": "alice@sentinel-acme.edu"},
         ],
-        "transactions": [
-            {
-                "id": "TXN-001",
-                "customer_id": "CUS-100",
-                "amount": 100.0,
-                "refunded_amount": 0.0,
-                "refund_status": "settled",
-                "date": "2026-09-10T00:00:00Z",
-                "chargeback_status": "none",
-                "under_fraud_investigation": False,
-            },
-            {
-                "id": "TXN-HOLD",
-                "customer_id": "CUS-100",
-                "amount": 200.0,
-                "refunded_amount": 0.0,
-                "refund_status": "settled",
-                "date": "2026-09-10T00:00:00Z",
-                "chargeback_status": "investigation_active",
-                "under_fraud_investigation": False,
-            },
-            {
-                "id": "TXN-OLD",
-                "customer_id": "CUS-100",
-                "amount": 50.0,
-                "refunded_amount": 0.0,
-                "refund_status": "settled",
-                "date": "2026-07-01T00:00:00Z",
-                "chargeback_status": "none",
-                "under_fraud_investigation": False,
-            },
+        "domains": [
+            {"domain_id": "DOM-OFFICIAL-001", "domain": "sentinel-acme.edu", "category": "official"},
         ],
-        "subscriptions": [
-            {
-                "id": "SUB-001",
-                "customer_id": "CUS-100",
-                "status": "active",
-                "lock_in_until": "2026-08-01T00:00:00Z",  # In the past
-                "has_approved_exception": False,
-                "has_unresolved_dispute": False,
-            },
-            {
-                "id": "SUB-LOCKED",
-                "customer_id": "CUS-100",
-                "status": "active",
-                "lock_in_until": "2026-12-01T00:00:00Z",  # In the future
-                "has_approved_exception": False,
-                "has_unresolved_dispute": False,
-            },
-            {
-                "id": "SUB-EXCEPT",
-                "customer_id": "CUS-100",
-                "status": "active",
-                "lock_in_until": "2026-12-01T00:00:00Z",
-                "has_approved_exception": True,
-                "has_unresolved_dispute": False,
-            },
-            {
-                "id": "SUB-DISPUTE",
-                "customer_id": "CUS-100",
-                "status": "active",
-                "lock_in_until": "2026-08-01T00:00:00Z",
-                "has_approved_exception": False,
-                "has_unresolved_dispute": True,
-            },
+        "threat_intel": [
+            {"domain_id": "DOM-THREAT-001", "domain": "phishing-corp.example", "reputation": "malicious"},
+        ],
+        "security_policies": [
+            {"id": "POL-001", "category": "phishing", "title": "Phishing Response Policy"},
         ],
         "policies": [
-            {
-                "id": "DOC-1001",
-                "category": "refund",
-                "title": "Authoritative Refund Policy",
-                "updated_at": "2026-09-01T00:00:00Z",
-                "rules": {"refund_window_days": 30},
-            },
-            {
-                "id": "DOC-1003",
-                "category": "cancellation",
-                "title": "Authoritative Cancellation Policy",
-                "updated_at": "2026-09-01T00:00:00Z",
-            },
-            {
-                "id": "DOC-1842",
-                "category": "dispute_hold",
-                "title": "Dispute Hold Policy",
-                "updated_at": "2026-09-01T00:00:00Z",
-            },
+            {"id": "POL-001", "category": "phishing", "title": "Phishing Response Policy"},
         ],
-        "documents": [],
-        "historical_cases": [],
+        "historical_threats": [
+            {"log_id": "LOG-001", "threat_type": "phishing", "domain": "phishing-corp.example"},
+        ],
+        "threads": [],
+        "actions_taken": [],
     }
 
 
@@ -148,128 +80,109 @@ async def test_dev_reset_is_mock_only():
 
 
 # =============================================================================
-# 12-Scenario Comprehensive Domain Parity Matrix
+# SentinelZero Domain Parity Matrix (12 Scenarios)
 # =============================================================================
 
 
-def test_scenario_01_valid_refund(sample_world_state):
-    prod_res = check_refund_eligibility(sample_world_state, "TXN-001", 50.0, "customer returned item")
-    mock_res = mock_check_refund(sample_world_state, "TXN-001", 50.0, "customer returned item")
+def test_scenario_01_valid_allow_and_deliver(sz_world_state):
+    """allow_and_deliver should mutate delivery_status to 'delivered' in both prod and mock."""
+    prod_state, prod_res = apply_action_to_world(
+        sz_world_state, "allow_and_deliver", {"message_id": "MSG-SENTINEL-001", "reason": "Internal email from verified sender"}
+    )
+    mock_state, mock_res = mock_apply_action(
+        sz_world_state, "allow_and_deliver", {"message_id": "MSG-SENTINEL-001", "reason": "Internal email from verified sender"}
+    )
     assert prod_res.is_eligible is True
     assert mock_res.is_eligible is True
-    assert prod_res.to_dict() == mock_res.to_dict()
-
-    prod_state, _ = apply_action_to_world(
-        sample_world_state, "issue_refund", {"transaction_id": "TXN-001", "amount": 50.0}
-    )
-    mock_state, _ = mock_apply_action(sample_world_state, "issue_refund", {"transaction_id": "TXN-001", "amount": 50.0})
-    assert prod_state == mock_state
-
-
-def test_scenario_02_refund_amount_exceeds(sample_world_state):
-    prod_res = check_refund_eligibility(sample_world_state, "TXN-001", 150.0, "customer asking too much")
-    mock_res = mock_check_refund(sample_world_state, "TXN-001", 150.0, "customer asking too much")
-    assert prod_res.is_eligible is False
-    assert mock_res.is_eligible is False
-    assert prod_res.reason == "amount_exceeds_transaction"
-    assert mock_res.reason == "amount_exceeds_transaction"
+    assert prod_state["delivery_status"] == "delivered"
+    assert mock_state["delivery_status"] == "delivered"
     assert prod_res.to_dict() == mock_res.to_dict()
 
 
-def test_scenario_03_already_refunded(sample_world_state):
-    mutated, _ = apply_action_to_world(
-        sample_world_state, "issue_refund", {"transaction_id": "TXN-001", "amount": 100.0}
-    )
-    prod_res = check_refund_eligibility(mutated, "TXN-001", 10.0, "refund again")
-    mock_res = mock_check_refund(mutated, "TXN-001", 10.0, "refund again")
-    assert prod_res.is_eligible is False
-    assert mock_res.is_eligible is False
-    assert prod_res.reason == "already_refunded"
-    assert mock_res.reason == "already_refunded"
-    assert prod_res.to_dict() == mock_res.to_dict()
-
-
-def test_scenario_04_chargeback_investigation_hold(sample_world_state):
-    prod_res = check_refund_eligibility(sample_world_state, "TXN-HOLD", 200.0, "refund under dispute")
-    mock_res = mock_check_refund(sample_world_state, "TXN-HOLD", 200.0, "refund under dispute")
-    assert prod_res.is_eligible is False
-    assert mock_res.is_eligible is False
-    assert prod_res.reason == "chargeback_investigation_active"
-    assert mock_res.reason == "chargeback_investigation_active"
-    assert prod_res.policy_ref == "DOC-1842"
-    assert mock_res.policy_ref == "DOC-1842"
-    assert prod_res.to_dict() == mock_res.to_dict()
-
-
-def test_scenario_05_outside_refund_policy_window(sample_world_state):
-    prod_res = check_refund_eligibility(sample_world_state, "TXN-OLD", 50.0, "old transaction refund")
-    mock_res = mock_check_refund(sample_world_state, "TXN-OLD", 50.0, "old transaction refund")
-    assert prod_res.is_eligible is False
-    assert mock_res.is_eligible is False
-    assert prod_res.reason == "outside_refund_window"
-    assert mock_res.reason == "outside_refund_window"
-    assert prod_res.to_dict() == mock_res.to_dict()
-
-
-def test_scenario_06_valid_cancellation(sample_world_state):
-    prod_res = check_cancellation_eligibility(sample_world_state, "CUS-100", "SUB-001")
-    mock_res = mock_check_cancellation(sample_world_state, "CUS-100", "SUB-001")
+def test_scenario_02_apply_warning_banner(sz_world_state):
+    """apply_warning_banner should mutate delivery_status to 'warning_applied' in both."""
+    params = {"message_id": "MSG-SENTINEL-001", "banner_type": "EXTERNAL_SENDER", "reason": "Sender domain is external"}
+    prod_state, prod_res = apply_action_to_world(sz_world_state, "apply_warning_banner", params)
+    mock_state, mock_res = mock_apply_action(sz_world_state, "apply_warning_banner", params)
     assert prod_res.is_eligible is True
     assert mock_res.is_eligible is True
+    assert prod_state["delivery_status"] == "warning_applied"
+    assert mock_state["delivery_status"] == "warning_applied"
     assert prod_res.to_dict() == mock_res.to_dict()
 
+
+def test_scenario_03_quarantine_message(sz_world_state):
+    """quarantine_message should mutate delivery_status to 'quarantined' in both."""
+    params = {"message_id": "MSG-SENTINEL-001", "reason": "Phishing detected: malicious domain in sender"}
+    prod_state, prod_res = apply_action_to_world(sz_world_state, "quarantine_message", params)
+    mock_state, mock_res = mock_apply_action(sz_world_state, "quarantine_message", params)
+    assert prod_res.is_eligible is True
+    assert mock_res.is_eligible is True
+    assert prod_state["delivery_status"] == "quarantined"
+    assert mock_state["delivery_status"] == "quarantined"
+    assert prod_res.to_dict() == mock_res.to_dict()
+
+
+def test_scenario_04_missing_message_id_rejected(sz_world_state):
+    """Action with empty/missing message_id must be rejected with INVALID_MESSAGE_ID in both."""
+    prod_state, prod_res = apply_action_to_world(
+        sz_world_state, "quarantine_message", {"message_id": "", "reason": "no id"}
+    )
+    mock_state, mock_res = mock_apply_action(
+        sz_world_state, "quarantine_message", {"message_id": "", "reason": "no id"}
+    )
+    assert prod_res.is_eligible is False
+    assert mock_res.is_eligible is False
+    assert prod_res.error == "INVALID_MESSAGE_ID"
+    assert mock_res.error == "INVALID_MESSAGE_ID"
+    assert prod_res.to_dict() == mock_res.to_dict()
+
+
+def test_scenario_05_unknown_action_rejected(sz_world_state):
+    """An unknown action type must return UNKNOWN_ACTION in both prod and mock."""
+    prod_state, prod_res = apply_action_to_world(
+        sz_world_state, "issue_refund", {"transaction_id": "TXN-001", "amount": 50.0}
+    )
+    mock_state, mock_res = mock_apply_action(
+        sz_world_state, "issue_refund", {"transaction_id": "TXN-001", "amount": 50.0}
+    )
+    assert prod_res.is_eligible is False
+    assert mock_res.is_eligible is False
+    assert prod_res.error == "UNKNOWN_ACTION"
+    assert mock_res.error == "UNKNOWN_ACTION"
+
+
+def test_scenario_06_actions_taken_audit_trail(sz_world_state):
+    """Each action should append to actions_taken in world state in both prod and mock."""
     prod_state, _ = apply_action_to_world(
-        sample_world_state, "cancel_subscription", {"customer_id": "CUS-100", "subscription_id": "SUB-001"}
+        sz_world_state, "quarantine_message", {"message_id": "MSG-SENTINEL-001", "reason": "Phishing"}
     )
     mock_state, _ = mock_apply_action(
-        sample_world_state, "cancel_subscription", {"customer_id": "CUS-100", "subscription_id": "SUB-001"}
+        sz_world_state, "quarantine_message", {"message_id": "MSG-SENTINEL-001", "reason": "Phishing"}
     )
-    assert prod_state == mock_state
+    assert len(prod_state["actions_taken"]) == 1
+    assert len(mock_state["actions_taken"]) == 1
+    assert prod_state["actions_taken"][0]["action"] == "quarantine_message"
+    assert mock_state["actions_taken"][0]["action"] == "quarantine_message"
 
 
-def test_scenario_07_contractual_lock_in_active(sample_world_state):
-    prod_res = check_cancellation_eligibility(sample_world_state, "CUS-100", "SUB-LOCKED")
-    mock_res = mock_check_cancellation(sample_world_state, "CUS-100", "SUB-LOCKED")
-    assert prod_res.is_eligible is False
-    assert mock_res.is_eligible is False
-    assert prod_res.reason == "lock_in_period_active"
-    assert mock_res.reason == "lock_in_period_active"
-    assert prod_res.to_dict() == mock_res.to_dict()
-
-
-def test_scenario_08_cancellation_with_approved_exception(sample_world_state):
-    prod_res = check_cancellation_eligibility(sample_world_state, "CUS-100", "SUB-EXCEPT")
-    mock_res = mock_check_cancellation(sample_world_state, "CUS-100", "SUB-EXCEPT")
+def test_scenario_07_grounded_escalation_valid(sz_world_state):
+    """Escalation citing a retrieved evidence ID (EMP-001) must succeed in both."""
+    retrieved = {"EMP-001"}
+    reason = "Sender EMP-001 is not authorised to send from external domain"
+    prod_res = check_escalation_validity(sz_world_state, "MSG-SENTINEL-001", reason, retrieved)
+    mock_res = mock_check_escalation(sz_world_state, "MSG-SENTINEL-001", reason, retrieved)
     assert prod_res.is_eligible is True
     assert mock_res.is_eligible is True
     assert prod_res.to_dict() == mock_res.to_dict()
 
 
-def test_scenario_09_unresolved_billing_dispute(sample_world_state):
-    prod_res = check_cancellation_eligibility(sample_world_state, "CUS-100", "SUB-DISPUTE")
-    mock_res = mock_check_cancellation(sample_world_state, "CUS-100", "SUB-DISPUTE")
-    assert prod_res.is_eligible is False
-    assert mock_res.is_eligible is False
-    assert prod_res.reason == "unresolved_billing_dispute"
-    assert mock_res.reason == "unresolved_billing_dispute"
-    assert prod_res.to_dict() == mock_res.to_dict()
-
-
-def test_scenario_10_valid_grounded_escalation(sample_world_state):
-    retrieved = {"TXN-HOLD", "DOC-1842"}
-    reason = "Active investigation on TXN-HOLD requires escalation per DOC-1842"
-    prod_res = check_escalation_validity(sample_world_state, "CASE-01", "fraud_team", reason, retrieved)
-    mock_res = mock_check_escalation(sample_world_state, "CASE-01", "fraud_team", reason, retrieved)
-    assert prod_res.is_eligible is True
-    assert mock_res.is_eligible is True
-    assert prod_res.to_dict() == mock_res.to_dict()
-
-
-def test_scenario_11_invalid_ungrounded_escalation(sample_world_state):
-    retrieved = {"TXN-001"}
+def test_scenario_08_ungrounded_escalation_rejected(sz_world_state):
+    """Escalation with no evidence ID in reason must be rejected in both."""
+    retrieved = {"EMP-001"}
     reason = "Customer is very angry and yelling at me"
-    prod_res = check_escalation_validity(sample_world_state, "CASE-01", "support", reason, retrieved)
-    mock_res = mock_check_escalation(sample_world_state, "CASE-01", "support", reason, retrieved)
+    prod_res = check_escalation_validity(sz_world_state, "MSG-SENTINEL-001", reason, retrieved)
+    mock_res = mock_check_escalation(sz_world_state, "MSG-SENTINEL-001", reason, retrieved)
     assert prod_res.is_eligible is False
     assert mock_res.is_eligible is False
     assert prod_res.reason == "reason_not_grounded"
@@ -277,14 +190,51 @@ def test_scenario_11_invalid_ungrounded_escalation(sample_world_state):
     assert prod_res.to_dict() == mock_res.to_dict()
 
 
-def test_scenario_12_verification_safe_fallback(sample_world_state):
-    prod_state, prod_res = apply_action_to_world(
-        sample_world_state, "request_verification", {"customer_id": "CUS-100", "verification_type": "identity"}
-    )
-    mock_state, mock_res = mock_apply_action(
-        sample_world_state, "request_verification", {"customer_id": "CUS-100", "verification_type": "identity"}
-    )
+def test_scenario_09_short_reason_rejected(sz_world_state):
+    """Escalation with very short reason must be rejected in both."""
+    prod_res = check_escalation_validity(sz_world_state, "MSG-SENTINEL-001", "ok", {})
+    mock_res = mock_check_escalation(sz_world_state, "MSG-SENTINEL-001", "ok", {})
+    assert prod_res.is_eligible is False
+    assert mock_res.is_eligible is False
+    assert prod_res.reason == "reason_not_grounded"
+    assert mock_res.reason == "reason_not_grounded"
+
+
+def test_scenario_10_escalation_with_dom_evidence(sz_world_state):
+    """Escalation citing a domain ID (DOM-THREAT-001) must succeed in both."""
+    retrieved = {"DOM-THREAT-001"}
+    reason = "Domain DOM-THREAT-001 is on the threat intelligence blacklist"
+    prod_res = check_escalation_validity(sz_world_state, "MSG-SENTINEL-001", reason, retrieved)
+    mock_res = mock_check_escalation(sz_world_state, "MSG-SENTINEL-001", reason, retrieved)
     assert prod_res.is_eligible is True
     assert mock_res.is_eligible is True
     assert prod_res.to_dict() == mock_res.to_dict()
-    assert prod_state == mock_state
+
+
+def test_scenario_11_escalate_to_tier2_as_action(sz_world_state):
+    """escalate_to_tier2_soc action with grounded reason should update world state in both."""
+    retrieved = {"DOM-THREAT-001"}
+    params = {
+        "message_id": "MSG-SENTINEL-001",
+        "reason": "Active threat intelligence match DOM-THREAT-001 requires human SOC review",
+    }
+    prod_state, prod_res = apply_action_to_world(sz_world_state, "escalate_to_tier2_soc", params, retrieved)
+    mock_state, mock_res = mock_apply_action(sz_world_state, "escalate_to_tier2_soc", params, retrieved)
+    assert prod_res.is_eligible is True
+    assert mock_res.is_eligible is True
+    assert prod_state.get("delivery_status") == "escalated_to_soc"
+    assert mock_state.get("delivery_status") == "escalated_to_soc"
+    assert prod_res.to_dict() == mock_res.to_dict()
+
+
+def test_scenario_12_ungrounded_escalate_no_mutation(sz_world_state):
+    """Ungrounded escalate_to_tier2_soc must NOT mutate world state in either prod or mock."""
+    import copy
+    initial_state = copy.deepcopy(sz_world_state)
+    params = {"message_id": "MSG-SENTINEL-001", "reason": "This message looks fishy to me"}
+    prod_state, prod_res = apply_action_to_world(sz_world_state, "escalate_to_tier2_soc", params, set())
+    mock_state, mock_res = mock_apply_action(sz_world_state, "escalate_to_tier2_soc", params, set())
+    assert prod_res.is_eligible is False
+    assert mock_res.is_eligible is False
+    assert prod_state is sz_world_state  # Returns original, not copy
+    assert prod_res.to_dict() == mock_res.to_dict()

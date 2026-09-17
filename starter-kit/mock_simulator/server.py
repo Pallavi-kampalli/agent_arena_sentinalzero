@@ -281,6 +281,51 @@ def apply_action_to_world(
 # =============================================================================
 
 
+class LookupDirectoryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    identifier: str = Field(..., min_length=1, max_length=200)
+
+
+class GetEmailHeadersRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    message_id: str = Field(..., min_length=1, max_length=100)
+
+
+class InspectDomainReputationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    domain: str = Field(..., min_length=1, max_length=250)
+
+
+class GetThreadHistoryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    thread_id: str = Field(..., min_length=1, max_length=100)
+
+
+class AllowAndDeliverRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    message_id: str = Field(..., min_length=1, max_length=100)
+    reason: str = Field(default="", max_length=1000)
+
+
+class ApplyWarningBannerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    message_id: str = Field(..., min_length=1, max_length=100)
+    banner_type: str = Field(default="EXTERNAL_SENDER", max_length=100)
+    reason: str = Field(default="", max_length=1000)
+
+
+class QuarantineMessageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    message_id: str = Field(..., min_length=1, max_length=100)
+    reason: str = Field(default="", max_length=1000)
+
+
+class EscalateToTier2SocRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    message_id: str = Field(..., min_length=1, max_length=100)
+    reason: str = Field(..., min_length=1, max_length=1000)
+
+
 class SearchKnowledgeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     query: str = Field(..., min_length=1, max_length=500)
@@ -343,26 +388,43 @@ class RequestVerificationRequest(BaseModel):
 
 class CaseClassification(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    category: str = Field(..., min_length=1, max_length=100)
-    issue: str = Field(..., min_length=1, max_length=100)
-    severity: Literal["low", "medium", "high", "critical"]
+
+    category: str = Field(default="cybersecurity_triage", min_length=1, max_length=100)
+    issue: str = Field(default="triage", min_length=1, max_length=100)
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
 
 
 class Decision(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    resolution: Literal["refund", "deny", "escalate", "request_info"]
-    escalation_required: bool
+
+    resolution: Literal[
+        "allow",
+        "warn",
+        "quarantine",
+        "escalate",
+        "ALLOW",
+        "WARN",
+        "QUARANTINE",
+        "ESCALATE",
+        "refund",
+        "deny",
+        "request_info",
+    ]
+    escalation_required: bool = False
 
 
 class TaskSubmitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     task_id: str = Field(..., min_length=1, max_length=100)
-    case_classification: CaseClassification
+    case_classification: CaseClassification | dict[str, Any] | None = None
     decision: Decision
     evidence: list[str] = Field(default_factory=list, max_length=100)
     uncertainties: list[str] = Field(default_factory=list, max_length=100)
-    customer_response: str = Field(..., min_length=1, max_length=10000)
-    confidence: float = Field(..., ge=0.0, le=1.0, allow_inf_nan=False)
+    customer_response: str = Field(default="", max_length=10000)
+    summary: str | None = Field(default=None, max_length=10000)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, allow_inf_nan=False)
+    prompt_injection_detected: bool = Field(default=False)
 
 
 # Response Schemas
@@ -483,6 +545,14 @@ def load_tasks_from_data_dir(data_dir: Path) -> list[dict]:
                 return json.load(f)
         return []
 
+    directory = _read_json("directory.json")
+    domains = _read_json("domains.json")
+    threat_intel = _read_json("threat_intel.json")
+    security_policies = _read_json("security_policies.json")
+    if not security_policies:
+        security_policies = _read_json("policies.json")
+    historical_threats = _read_json("historical_threats.json")
+
     customers = _read_json("customers.json")
     transactions = _read_json("transactions.json")
     subscriptions = _read_json("subscriptions.json")
@@ -497,12 +567,22 @@ def load_tasks_from_data_dir(data_dir: Path) -> list[dict]:
         overrides = t.get("task_overrides", {})
 
         world = {
-            "seed": 1000,
+            "seed": 50000,
             "current_date": "2026-09-15T00:00:00+00:00",
+            "directory": copy.deepcopy(directory),
+            "domains": copy.deepcopy(domains),
+            "threat_intel": copy.deepcopy(threat_intel),
+            "security_policies": copy.deepcopy(security_policies),
+            "policies": copy.deepcopy(security_policies if security_policies else policies),
+            "historical_threats": copy.deepcopy(historical_threats),
+            "threads": copy.deepcopy(overrides.get("threads", [])),
+            "actions_taken": [],
+            "target_message_id": inp.get("message_id", ""),
+            "target_thread_id": inp.get("thread_id", ""),
+
             "customers": copy.deepcopy(customers),
             "transactions": copy.deepcopy(transactions),
             "subscriptions": copy.deepcopy(subscriptions),
-            "policies": copy.deepcopy(policies),
             "documents": copy.deepcopy(policies),
             "historical_cases": copy.deepcopy(previous_cases),
             "previous_cases": copy.deepcopy(previous_cases),
@@ -511,13 +591,23 @@ def load_tasks_from_data_dir(data_dir: Path) -> list[dict]:
             "target_customer_id": inp.get("customer_id", ""),
         }
 
+        if "directory" in overrides:
+            world["directory"] = merge_entities_by_key(world["directory"], overrides["directory"], "id")
+        if "domains" in overrides:
+            world["domains"] = merge_entities_by_key(world["domains"], overrides["domains"], "domain_id")
+        if "threat_intel" in overrides:
+            world["threat_intel"] = merge_entities_by_key(world["threat_intel"], overrides["threat_intel"], "domain_id")
+        if "security_policies" in overrides:
+            world["security_policies"] = merge_entities_by_key(world["security_policies"], overrides["security_policies"], "id")
+            world["policies"] = copy.deepcopy(world["security_policies"])
+
         if "customers" in overrides:
             world["customers"] = merge_entities_by_key(world["customers"], overrides["customers"], "id")
         if "transactions" in overrides:
             world["transactions"] = merge_entities_by_key(world["transactions"], overrides["transactions"], "id")
         if "subscriptions" in overrides:
             world["subscriptions"] = merge_entities_by_key(world["subscriptions"], overrides["subscriptions"], "id")
-        if "policies" in overrides:
+        if "policies" in overrides and not security_policies:
             world["policies"] = merge_entities_by_key(world["policies"], overrides["policies"], "id")
             world["documents"] = merge_entities_by_key(world["documents"], overrides["policies"], "id")
         if "previous_cases" in overrides:
@@ -788,7 +878,114 @@ def get_retrieved_evidence_ids(conn: sqlite3.Connection, session_id: str, task_i
 
 
 def run_read_tool(tool_name: str, world_state: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    if tool_name == "search_knowledge":
+    if tool_name == "lookup_directory":
+        ident_clean = str(payload.get("identifier", "")).strip().lower()
+        directory = world_state.get("directory", [])
+        for emp in directory:
+            if not isinstance(emp, dict):
+                continue
+            if (
+                emp.get("official_email", "").strip().lower() == ident_clean
+                or emp.get("id", "").strip().lower() == ident_clean
+                or emp.get("name", "").strip().lower() == ident_clean
+            ):
+                return {"found": True, "employee": emp}
+        return {"found": False, "employee": None}
+
+    elif tool_name == "get_approved_domains":
+        domains = world_state.get("domains", [])
+        official = [d["domain"] for d in domains if isinstance(d, dict) and d.get("category") == "official"]
+        partner = [d["domain"] for d in domains if isinstance(d, dict) and d.get("category") == "partner"]
+        return {"official_domains": official, "partner_domains": partner}
+
+    elif tool_name == "get_email_headers":
+        msg_id_clean = str(payload.get("message_id", "")).strip()
+        matching_msg = None
+        for thr in world_state.get("threads", []):
+            if isinstance(thr, dict):
+                for m in thr.get("messages", []):
+                    if isinstance(m, dict) and m.get("message_id") == msg_id_clean:
+                        matching_msg = m
+                        break
+        sender = matching_msg.get("sender") if matching_msg else None
+        from_domain = sender.split("@")[-1] if sender and "@" in sender else "unknown.com"
+        domains = world_state.get("domains", [])
+        threat_intel = world_state.get("threat_intel", [])
+        is_official = any(d.get("domain") == from_domain and d.get("category") == "official" for d in domains if isinstance(d, dict))
+        threat_record = next((t for t in threat_intel if isinstance(t, dict) and t.get("domain") == from_domain), None)
+
+        if is_official:
+            auth_results = {"spf": "pass", "dkim": "pass", "dmarc": "pass"}
+        elif threat_record and threat_record.get("reputation") == "malicious":
+            auth_results = {"spf": "fail", "dkim": "fail", "dmarc": "fail"}
+        else:
+            auth_results = {"spf": "none", "dkim": "none", "dmarc": "none"}
+
+        return {
+            "message_id": msg_id_clean,
+            "from_header": sender or f"sender@{from_domain}",
+            "reply_to": sender or f"sender@{from_domain}",
+            "return_path": sender or f"sender@{from_domain}",
+            "originating_ip": "192.0.2.45",
+            "originating_domain": from_domain,
+            "auth_results": auth_results,
+        }
+
+    elif tool_name == "inspect_domain_reputation":
+        dom_clean = str(payload.get("domain", "")).strip().lower()
+        for d in world_state.get("domains", []):
+            if isinstance(d, dict) and d.get("domain", "").lower() == dom_clean:
+                return {
+                    "domain": d["domain"],
+                    "domain_id": d.get("domain_id"),
+                    "is_registered_internal": (d.get("category") == "official"),
+                    "domain_age_days": 1800,
+                    "reputation": "trusted",
+                    "lookalike_of": None,
+                    "threat_score": 0,
+                    "known_tags": ["verified_domain"],
+                }
+        for t in world_state.get("threat_intel", []):
+            if isinstance(t, dict) and t.get("domain", "").lower() == dom_clean:
+                return {
+                    "domain": t["domain"],
+                    "domain_id": t.get("domain_id"),
+                    "is_registered_internal": False,
+                    "domain_age_days": t.get("domain_age_days", 1),
+                    "reputation": t.get("reputation", "suspicious"),
+                    "lookalike_of": t.get("lookalike_of"),
+                    "threat_score": t.get("threat_score", 50),
+                    "known_tags": t.get("known_tags", []),
+                }
+        return {
+            "domain": dom_clean,
+            "domain_id": None,
+            "is_registered_internal": False,
+            "domain_age_days": 30,
+            "reputation": "unknown",
+            "lookalike_of": None,
+            "threat_score": 10,
+            "known_tags": ["external_unverified"],
+        }
+
+    elif tool_name == "get_thread_history":
+        thr_clean = str(payload.get("thread_id", "")).strip()
+        threads = world_state.get("threads", [])
+        for thr in threads:
+            if isinstance(thr, dict) and thr.get("thread_id") == thr_clean:
+                msgs = thr.get("messages", [])
+                return {
+                    "thread_id": thr_clean,
+                    "message_count": len(msgs),
+                    "messages": msgs,
+                }
+        return {
+            "thread_id": thr_clean,
+            "message_count": 0,
+            "messages": [],
+        }
+
+    elif tool_name == "search_knowledge":
         query = payload["query"]
         top_k = payload.get("top_k", 5)
         all_docs = []
@@ -951,7 +1148,36 @@ def run_action_tool(
 
     Returns (mutated_state_or_None, response_dict, was_rejection).
     """
-    if tool_name == "issue_refund":
+    if tool_name in ("allow_and_deliver", "apply_warning_banner", "quarantine_message", "escalate_to_tier2_soc"):
+        msg_id = payload.get("message_id", "")
+        reason = payload.get("reason", "")
+        if tool_name == "escalate_to_tier2_soc":
+            result = check_escalation_validity(
+                world_state=world_state,
+                message_id=msg_id,
+                reason=reason,
+                retrieved_evidence_ids=list(retrieved_evidence_ids),
+            )
+            if not result.is_eligible:
+                return None, {"error": "INVALID_ESCALATION", "reason": result.reason or "reason_not_grounded"}, True
+
+        mutated, _ = apply_action_to_world(
+            world_state,
+            action_type=tool_name,
+            params=payload,
+            retrieved_evidence_ids=list(retrieved_evidence_ids),
+        )
+        if tool_name == "allow_and_deliver":
+            return mutated, {"status": "delivered", "message_id": msg_id}, False
+        elif tool_name == "apply_warning_banner":
+            banner = payload.get("banner_type", "EXTERNAL_SENDER")
+            return mutated, {"status": "warning_applied", "message_id": msg_id, "banner": banner}, False
+        elif tool_name == "quarantine_message":
+            return mutated, {"status": "quarantined", "message_id": msg_id}, False
+        elif tool_name == "escalate_to_tier2_soc":
+            return mutated, {"status": "escalated_to_soc", "message_id": msg_id}, False
+
+    elif tool_name == "issue_refund":
         tx_id = payload["transaction_id"]
         amount = payload["amount"]
         reason = payload["reason"]
@@ -1919,6 +2145,187 @@ def request_verification(
         conn.close()
 
 
+@app.post("/tools/lookup_directory")
+def lookup_directory(
+    req: LookupDirectoryRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
+        resp = run_read_tool("lookup_directory", world_state, req.model_dump())
+        latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
+        log_tool_call(conn, session_id, task_id, submission_id, "lookup_directory", req.model_dump(), resp, False, latency_ms)
+        return resp
+    finally:
+        conn.close()
+
+
+@app.post("/tools/get_approved_domains")
+def get_approved_domains(
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
+        resp = run_read_tool("get_approved_domains", world_state, {})
+        latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
+        log_tool_call(conn, session_id, task_id, submission_id, "get_approved_domains", {}, resp, False, latency_ms)
+        return resp
+    finally:
+        conn.close()
+
+
+@app.post("/tools/get_email_headers")
+def get_email_headers(
+    req: GetEmailHeadersRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
+        resp = run_read_tool("get_email_headers", world_state, req.model_dump())
+        latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
+        log_tool_call(conn, session_id, task_id, submission_id, "get_email_headers", req.model_dump(), resp, False, latency_ms)
+        return resp
+    finally:
+        conn.close()
+
+
+@app.post("/tools/inspect_domain_reputation")
+def inspect_domain_reputation(
+    req: InspectDomainReputationRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
+        resp = run_read_tool("inspect_domain_reputation", world_state, req.model_dump())
+        latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
+        log_tool_call(conn, session_id, task_id, submission_id, "inspect_domain_reputation", req.model_dump(), resp, False, latency_ms)
+        return resp
+    finally:
+        conn.close()
+
+
+@app.post("/tools/get_thread_history")
+def get_thread_history(
+    req: GetThreadHistoryRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        _, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
+        resp = run_read_tool("get_thread_history", world_state, req.model_dump())
+        latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
+        log_tool_call(conn, session_id, task_id, submission_id, "get_thread_history", req.model_dump(), resp, False, latency_ms)
+        return resp
+    finally:
+        conn.close()
+
+
+@app.post("/tools/allow_and_deliver")
+def allow_and_deliver(
+    req: AllowAndDeliverRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        assignment_id, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
+        retrieved_ids = get_retrieved_evidence_ids(conn, session_id, task_id)
+        mutated, resp, was_rejection = run_action_tool("allow_and_deliver", world_state, req.model_dump(), retrieved_ids)
+        if mutated is not None and not was_rejection:
+            update_world_state(conn, assignment_id, mutated)
+        latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
+        log_tool_call(conn, session_id, task_id, submission_id, "allow_and_deliver", req.model_dump(), resp, was_rejection, latency_ms)
+        return resp
+    finally:
+        conn.close()
+
+
+@app.post("/tools/apply_warning_banner")
+def apply_warning_banner(
+    req: ApplyWarningBannerRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        assignment_id, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
+        retrieved_ids = get_retrieved_evidence_ids(conn, session_id, task_id)
+        mutated, resp, was_rejection = run_action_tool("apply_warning_banner", world_state, req.model_dump(), retrieved_ids)
+        if mutated is not None and not was_rejection:
+            update_world_state(conn, assignment_id, mutated)
+        latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
+        log_tool_call(conn, session_id, task_id, submission_id, "apply_warning_banner", req.model_dump(), resp, was_rejection, latency_ms)
+        return resp
+    finally:
+        conn.close()
+
+
+@app.post("/tools/quarantine_message")
+def quarantine_message(
+    req: QuarantineMessageRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        assignment_id, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
+        retrieved_ids = get_retrieved_evidence_ids(conn, session_id, task_id)
+        mutated, resp, was_rejection = run_action_tool("quarantine_message", world_state, req.model_dump(), retrieved_ids)
+        if mutated is not None and not was_rejection:
+            update_world_state(conn, assignment_id, mutated)
+        latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
+        log_tool_call(conn, session_id, task_id, submission_id, "quarantine_message", req.model_dump(), resp, was_rejection, latency_ms)
+        return resp
+    finally:
+        conn.close()
+
+
+@app.post("/tools/escalate_to_tier2_soc")
+def escalate_to_tier2_soc(
+    req: EscalateToTier2SocRequest,
+    authorization: str | None = Header(default=None),
+    x_task_id: str | None = Header(default=None),
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    session_id = get_session_id(authorization)
+    conn = get_db_connection()
+    try:
+        assignment_id, task_id, world_state, submission_id = get_active_assignment(conn, session_id, task_id=x_task_id)
+        retrieved_ids = get_retrieved_evidence_ids(conn, session_id, task_id)
+        mutated, resp, was_rejection = run_action_tool("escalate_to_tier2_soc", world_state, req.model_dump(), retrieved_ids)
+        if mutated is not None and not was_rejection:
+            update_world_state(conn, assignment_id, mutated)
+        latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
+        log_tool_call(conn, session_id, task_id, submission_id, "escalate_to_tier2_soc", req.model_dump(), resp, was_rejection, latency_ms)
+        return resp
+    finally:
+        conn.close()
+
 
 # --- Task Flow Endpoints ---
 
@@ -2002,7 +2409,9 @@ def submit_task(
     session_id = get_session_id(authorization)
     conn = get_db_connection()
     try:
-        assignment_id, active_task_id, runtime_state, submission_id = get_active_assignment(conn, session_id)
+        assignment_id, active_task_id, runtime_state, submission_id = get_active_assignment(
+            conn, session_id, task_id=req.task_id
+        )
         if active_task_id != req.task_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

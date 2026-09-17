@@ -77,8 +77,8 @@ async def test_task_time_budget_enforcement_and_auto_timeout(
 
     # 1. Tool call on expired task is rejected with 409 TASK_TIMED_OUT
     tool_resp = await client.post(
-        "/tools/search_knowledge",
-        json={"query": "refund", "top_k": 3},
+        "/tools/get_approved_domains",
+        json={},
         headers=headers,
     )
     assert tool_resp.status_code == 409

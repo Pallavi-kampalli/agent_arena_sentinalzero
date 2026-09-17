@@ -1,0 +1,65 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.8, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\Pallavi\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Pallavi\OneDrive\Desktop\agent_arena_
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 33 items
+
+tests/test_read_tools.py::test_lookup_directory_found_and_not_found PASSED [  3%]
+tests/test_read_tools.py::test_get_approved_domains_returns_list PASSED  [  6%]
+tests/test_read_tools.py::test_get_email_headers_success_and_not_found PASSED [  9%]
+tests/test_read_tools.py::test_inspect_domain_reputation_success PASSED  [ 12%]
+tests/test_read_tools.py::test_get_thread_history_success PASSED         [ 15%]
+tests/test_read_tools.py::test_unauthenticated_request_rejected PASSED   [ 18%]
+tests/test_read_tools.py::test_no_active_task_returns_404 PASSED         [ 21%]
+tests/test_action_tools.py::test_quarantine_message_success_and_state_mutation PASSED [ 24%]
+tests/test_action_tools.py::test_allow_and_deliver_success PASSED        [ 27%]
+tests/test_action_tools.py::test_apply_warning_banner_success PASSED     [ 30%]
+tests/test_action_tools.py::test_escalate_to_tier2_soc_grounded_vs_ungrounded PASSED [ 33%]
+tests/test_action_tools.py::test_action_tool_zero_mutation_on_rejection FAILED [ 36%]
+tests/test_action_tools.py::test_enforcement_rejection_logged_correctly PASSED [ 39%]
+tests/test_action_tools.py::test_no_active_task_action_returns_404 PASSED [ 42%]
+tests/test_participant_contract.py::test_stale_artifact_ci_guard PASSED  [ 45%]
+tests/test_participant_contract.py::test_dev_reset_is_mock_only PASSED   [ 48%]
+tests/test_participant_contract.py::test_scenario_01_valid_allow_and_deliver PASSED [ 51%]
+tests/test_participant_contract.py::test_scenario_02_apply_warning_banner PASSED [ 54%]
+tests/test_participant_contract.py::test_scenario_03_quarantine_message PASSED [ 57%]
+tests/test_participant_contract.py::test_scenario_04_missing_message_id_rejected PASSED [ 60%]
+tests/test_participant_contract.py::test_scenario_05_unknown_action_rejected PASSED [ 63%]
+tests/test_participant_contract.py::test_scenario_06_actions_taken_audit_trail PASSED [ 66%]
+tests/test_participant_contract.py::test_scenario_07_grounded_escalation_valid PASSED [ 69%]
+tests/test_participant_contract.py::test_scenario_08_ungrounded_escalation_rejected PASSED [ 72%]
+tests/test_participant_contract.py::test_scenario_09_short_reason_rejected PASSED [ 75%]
+tests/test_participant_contract.py::test_scenario_10_escalation_with_dom_evidence PASSED [ 78%]
+tests/test_participant_contract.py::test_scenario_11_escalate_to_tier2_as_action PASSED [ 81%]
+tests/test_participant_contract.py::test_scenario_12_ungrounded_escalate_no_mutation PASSED [ 84%]
+tests/test_scoring_adversarial.py::test_adversarial_fabricated_evidence_ids PASSED [ 87%]
+tests/test_scoring_adversarial.py::test_adversarial_sealed_timeout_is_zero PASSED [ 90%]
+tests/test_scoring_adversarial.py::test_adversarial_unstarted_task_is_zero PASSED [ 93%]
+tests/test_scoring_adversarial.py::test_adversarial_lying_about_resolution FAILED [ 96%]
+tests/test_scoring_adversarial.py::test_adversarial_boundary_confidence_values FAILED [100%]
+
+================================== FAILURES ===================================
+_________________ test_action_tool_zero_mutation_on_rejection _________________
+tests\test_action_tools.py:183: in test_action_tool_zero_mutation_on_rejection
+    assert assignment_before is not None
+E   assert None is not None
+___________________ test_adversarial_lying_about_resolution ___________________
+tests\test_scoring_adversarial.py:186: in test_adversarial_lying_about_resolution
+    assert result.scores.task_aggregate < 0.15
+E   AssertionError: assert 0.275 < 0.15
+E    +  where 0.275 = DimensionScores(task_success=0.0, policy=0.0, robustness=0.0, evidence=0.6667, calibration=0.0, efficiency=1.0, communication=0.75, task_aggregate=0.275).task_aggregate
+E    +    where DimensionScores(task_success=0.0, policy=0.0, robustness=0.0, evidence=0.6667, calibration=0.0, efficiency=1.0, communication=0.75, task_aggregate=0.275) = TaskScoreResult(task_id='TASK-HIDDEN-003', status='completed', scores=DimensionScores(task_success=0.0, policy=0.0, robustness=0.0, evidence=0.6667, calibration=0.0, efficiency=1.0, communication=0.75, task_aggregate=0.275), audit={'submitted_resolution': 'allow', 'expected_resolution': 'escalate', 'submitted_action_tool': 'quarantine_message', 'expected_action_tool': '', 'action_matches_decision': False, 'multiple_actions_taken': 1, 'enforcement_rejections': 1, 'tool_calls_count': 1, 'duplicate_calls_count': 0, 'cited_evidence': ['MSG-HIDDEN-003'], 'valid_observed_evidence': ['MSG-HIDDEN-003'], 'fabricated_evidence_count': 0, 'required_evidence': ['MSG-HIDDEN-003', 'DOM-APT-001'], 'precision': 1.0, 'recall': 0.5, 'f1': 0.6667, 'true_positives': 1.0, 'confidence': 0.99, 'confidence_valid': True, 'must_escalate': True, 'escalation_required': False, 'invalid_decision': False}).scores
+_________________ test_adversarial_boundary_confidence_values _________________
+tests\test_scoring_adversarial.py:227: in test_adversarial_boundary_confidence_values
+    assert res_0.scores.calibration == 0.0
+E   AssertionError: assert 1.0 == 0.0
+E    +  where 1.0 = DimensionScores(task_success=0.55, policy=0.5, robustness=0.55, evidence=1.0, calibration=1.0, efficiency=1.0, communication=1.0, task_aggregate=0.745).calibration
+E    +    where DimensionScores(task_success=0.55, policy=0.5, robustness=0.55, evidence=1.0, calibration=1.0, efficiency=1.0, communication=1.0, task_aggregate=0.745) = TaskScoreResult(task_id='TASK-HIDDEN-001', status='completed', scores=DimensionScores(task_success=0.55, policy=0.5, robustness=0.55, evidence=1.0, calibration=1.0, efficiency=1.0, communication=1.0, task_aggregate=0.745), audit={'submitted_resolution': 'quarantine', 'expected_resolution': 'quarantine', 'submitted_action_tool': None, 'expected_action_tool': '', 'action_matches_decision': False, 'multiple_actions_taken': 0, 'enforcement_rejections': 0, 'tool_calls_count': 2, 'duplicate_calls_count': 0, 'cited_evidence': ['MSG-HIDDEN-001', 'DOM-MALICIOUS-001'], 'valid_observed_evidence': ['DOM-MALICIOUS-001', 'MSG-HIDDEN-001'], 'fabricated_evidence_count': 0, 'required_evidence': ['MSG-HIDDEN-001', 'DOM-MALICIOUS-001'], 'precision': 1.0, 'recall': 1.0, 'f1': 1.0, 'true_positives': 2.0, 'confidence': 0.0, 'confidence_valid': True, 'must_escalate': False, 'escalation_required': False, 'invalid_decision': False}).scores
+=========================== short test summary info ===========================
+FAILED tests/test_action_tools.py::test_action_tool_zero_mutation_on_rejection
+FAILED tests/test_scoring_adversarial.py::test_adversarial_lying_about_resolution
+FAILED tests/test_scoring_adversarial.py::test_adversarial_boundary_confidence_values
+======================== 3 failed, 30 passed in 2.80s =========================

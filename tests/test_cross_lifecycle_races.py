@@ -114,23 +114,23 @@ async def test_model_b_task_reuse_across_teams(client: AsyncClient, db_session: 
     assert r_t1.json()["task_id"] == "TASK-REUSE-000"
     assert r_t2.json()["task_id"] == "TASK-REUSE-000"
 
-    # Team 1 refunds $30.0
+    # Team 1 quarantines message MSG-001
     r_ref1 = await client.post(
-        "/tools/issue_refund",
-        json={"transaction_id": "TXN-REUSE-0", "amount": 30.0, "reason": "Team 1 partial refund"},
+        "/tools/quarantine_message",
+        json={"message_id": "MSG-REUSE-0", "reason": "Team 1 phishing quarantine"},
         headers=headers_1,
     )
     assert r_ref1.status_code == 200
-    assert r_ref1.json()["transaction"]["refunded_amount"] == 30.0
+    assert r_ref1.json()["status"] == "quarantined"
 
-    # Team 2 refunds $75.0
+    # Team 2 allows message MSG-001
     r_ref2 = await client.post(
-        "/tools/issue_refund",
-        json={"transaction_id": "TXN-REUSE-0", "amount": 75.0, "reason": "Team 2 partial refund"},
+        "/tools/allow_and_deliver",
+        json={"message_id": "MSG-REUSE-0", "reason": "Team 2 cleared message"},
         headers=headers_2,
     )
     assert r_ref2.status_code == 200
-    assert r_ref2.json()["transaction"]["refunded_amount"] == 75.0
+    assert r_ref2.json()["status"] == "delivered"
 
     # Verify direct database isolation
     a1 = (
@@ -140,16 +140,12 @@ async def test_model_b_task_reuse_across_teams(client: AsyncClient, db_session: 
         await db_session.execute(sa.select(TaskAssignment).where(TaskAssignment.submission_id == uuid.UUID(sub_id_2)))
     ).scalar_one()
 
-    tx1 = next(t for t in a1.world_runtime_state["transactions"] if t["id"] == "TXN-REUSE-0")
-    tx2 = next(t for t in a2.world_runtime_state["transactions"] if t["id"] == "TXN-REUSE-0")
-    assert tx1["refunded_amount"] == 30.0
-    assert tx2["refunded_amount"] == 75.0
+    assert a1.world_runtime_state.get("delivery_status") == "quarantined"
+    assert a2.world_runtime_state.get("delivery_status") == "delivered"
 
     # Verify seed immutability in tasks table
     task_row = (await db_session.execute(sa.select(Task).where(Task.task_id == "TASK-REUSE-000"))).scalar_one()
-    seed_tx = next(t for t in task_row.world_state_seed["transactions"] if t["id"] == "TXN-REUSE-0")
-    assert seed_tx["refunded_amount"] == 0.0
-    assert seed_tx["refund_status"] == "none"
+    assert "delivery_status" not in task_row.world_state_seed
 
 
 @pytest.mark.asyncio

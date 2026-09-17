@@ -1,0 +1,30 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.8, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\Pallavi\OneDrive\Desktop\agent_arena_
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collected 16 items
+
+tests\test_adversarial_hardening.py ..F..F.F........                     [100%]
+
+================================== FAILURES ===================================
+____________________ test_seed_immutability_across_actions ____________________
+tests\test_adversarial_hardening.py:204: in test_seed_immutability_across_actions
+    initial_seed = copy.deepcopy(task_before.world_state_seed)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'world_state_seed'
+________________________ test_concurrency_budget_race _________________________
+tests\test_adversarial_hardening.py:329: in test_concurrency_budget_race
+    assert ok_count == 2
+E   assert 1 == 2
+___________________ test_budget_and_rate_limit_interaction ____________________
+tests\test_adversarial_hardening.py:398: in test_budget_and_rate_limit_interaction
+    assert r2.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+=========================== short test summary info ===========================
+FAILED tests/test_adversarial_hardening.py::test_seed_immutability_across_actions
+FAILED tests/test_adversarial_hardening.py::test_concurrency_budget_race - as...
+FAILED tests/test_adversarial_hardening.py::test_budget_and_rate_limit_interaction
+======================== 3 failed, 13 passed in 3.83s =========================

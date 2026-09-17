@@ -25,73 +25,63 @@ def test_sdk_init_defaults():
 
 
 def test_sdk_read_tools():
-    """Verifies SDK dispatch for all 6 read tools."""
+    """Verifies SDK dispatch for all 5 SentinelZero read tools."""
     mock_httpx = MagicMock()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
-    mock_resp.json.return_value = {"results": [{"id": "DOC-1"}]}
+    mock_resp.json.return_value = {"found": True, "employee": {"id": "EMP-1001"}}
     mock_httpx.post.return_value = mock_resp
 
     client = ToolsClient(base_url="http://localhost:8000")
     client._client = mock_httpx
 
-    # 1. search_knowledge
-    res = client.search_knowledge("refund policy", top_k=3)
-    assert res == {"results": [{"id": "DOC-1"}]}
-    mock_httpx.post.assert_called_with("/tools/search_knowledge", json={"query": "refund policy", "top_k": 3})
+    # 1. lookup_directory
+    res = client.lookup_directory("alice@sentinel-acme.edu")
+    assert res == {"found": True, "employee": {"id": "EMP-1001"}}
+    mock_httpx.post.assert_called_with("/tools/lookup_directory", json={"identifier": "alice@sentinel-acme.edu"})
 
-    # 2. get_document
-    mock_resp.json.return_value = {"document": {"id": "DOC-1"}}
-    res = client.get_document("DOC-1")
-    assert res["document"]["id"] == "DOC-1"
-    mock_httpx.post.assert_called_with("/tools/get_document", json={"document_id": "DOC-1"})
+    # 2. get_approved_domains
+    mock_resp.json.return_value = {"official_domains": ["sentinel-acme.edu"]}
+    res = client.get_approved_domains()
+    assert res["official_domains"] == ["sentinel-acme.edu"]
+    mock_httpx.post.assert_called_with("/tools/get_approved_domains", json={})
 
-    # 3. get_customer
-    mock_resp.json.return_value = {"customer": {"id": "CUS-1"}}
-    res = client.get_customer("CUS-1")
-    assert res["customer"]["id"] == "CUS-1"
-    mock_httpx.post.assert_called_with("/tools/get_customer", json={"customer_id": "CUS-1"})
+    # 3. get_email_headers
+    mock_resp.json.return_value = {"message_id": "MSG-001"}
+    res = client.get_email_headers("MSG-001")
+    assert res["message_id"] == "MSG-001"
+    mock_httpx.post.assert_called_with("/tools/get_email_headers", json={"message_id": "MSG-001"})
 
-    # 4. get_transactions
-    mock_resp.json.return_value = {"transactions": [{"id": "TXN-1"}]}
-    res = client.get_transactions("CUS-1", start_date="2026-01-01")
-    assert "transactions" in res
-    mock_httpx.post.assert_called_with(
-        "/tools/get_transactions", json={"customer_id": "CUS-1", "start_date": "2026-01-01"}
-    )
+    # 4. inspect_domain_reputation
+    mock_resp.json.return_value = {"reputation": "trusted"}
+    res = client.inspect_domain_reputation("sentinel-acme.edu")
+    assert res["reputation"] == "trusted"
+    mock_httpx.post.assert_called_with("/tools/inspect_domain_reputation", json={"domain": "sentinel-acme.edu"})
 
-    # 5. get_subscription
-    mock_resp.json.return_value = {"subscription": {"id": "SUB-1"}}
-    res = client.get_subscription("CUS-1")
-    assert res["subscription"]["id"] == "SUB-1"
-    mock_httpx.post.assert_called_with("/tools/get_subscription", json={"customer_id": "CUS-1"})
-
-    # 6. get_previous_cases
-    mock_resp.json.return_value = {"cases": [{"case_id": "CASE-1"}]}
-    res = client.get_previous_cases("CUS-1", limit=2)
-    assert "cases" in res
-    mock_httpx.post.assert_called_with("/tools/get_previous_cases", json={"customer_id": "CUS-1", "limit": 2})
+    # 5. get_thread_history
+    mock_resp.json.return_value = {"messages": []}
+    res = client.get_thread_history("THR-001")
+    assert "messages" in res
+    mock_httpx.post.assert_called_with("/tools/get_thread_history", json={"thread_id": "THR-001"})
 
 
 def test_sdk_preserves_domain_rejections():
-    """Verifies that HTTP 200 INELIGIBLE responses are preserved as dicts, not raised as exceptions."""
+    """Verifies that HTTP 200 INELIGIBLE/INVALID_ESCALATION responses are preserved as dicts, not raised as exceptions."""
     mock_httpx = MagicMock()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
-        "error": "INELIGIBLE",
-        "reason": "chargeback_investigation_active",
-        "policy_ref": "DOC-1842",
+        "error": "INVALID_ESCALATION",
+        "reason": "reason_not_grounded",
     }
     mock_httpx.post.return_value = mock_resp
 
     client = ToolsClient()
     client._client = mock_httpx
 
-    result = client.issue_refund("TXN-1", 100.0, "reason")
-    assert result.get("error") == "INELIGIBLE"
-    assert result.get("reason") == "chargeback_investigation_active"
-    assert result.get("policy_ref") == "DOC-1842"
+    result = client.escalate_to_tier2_soc("MSG-001", "un-grounded reason")
+    assert result.get("error") == "INVALID_ESCALATION"
+    assert result.get("reason") == "reason_not_grounded"
 
 
 def test_sdk_raises_api_error_on_http_failure():

@@ -1,0 +1,25 @@
+FAILED tests/test_adversarial_hardening.py::test_cross_task_identical_entities_full_isolation
+FAILED tests/test_adversarial_hardening.py::test_seed_immutability_across_actions
+FAILED tests/test_adversarial_hardening.py::test_zero_mutation_on_rejected_actions
+FAILED tests/test_adversarial_hardening.py::test_immediate_token_revocation_no_cache
+FAILED tests/test_adversarial_hardening.py::test_database_failure_injection_rollback
+FAILED tests/test_competition_e2e.py::test_e2e_starter_kit_agent_against_mock
+FAILED tests/test_concurrency_and_isolation.py::test_cross_team_isolation - a...
+FAILED tests/test_concurrency_and_isolation.py::test_concurrent_refund_attempts
+FAILED tests/test_concurrency_and_isolation.py::test_dynamic_rate_limiter_setting
+FAILED tests/test_concurrency_and_isolation.py::test_per_task_tool_call_budget
+FAILED tests/test_cross_lifecycle_races.py::test_model_b_task_reuse_across_teams
+FAILED tests/test_dataset_service.py::test_dataset_service_dev_rejected - Fai...
+FAILED tests/test_e2e_starter_kit.py::test_starter_agent_end_to_end_against_mock
+FAILED tests/test_e2e_starter_kit.py::test_naive_agent_fails_naturally_without_environment_crash
+FAILED tests/test_participant_sdk.py::test_sdk_read_tools - AssertionError: e...
+FAILED tests/test_participant_sdk.py::test_sdk_preserves_domain_rejections - ...
+FAILED tests/test_reference_vs_naive.py::test_agent_quality_differential_distributional_analysis
+FAILED tests/test_scoring_service.py::test_score_submission_full_flow - asser...
+FAILED tests/test_scoring_service.py::test_early_finalization_scaling_defense
+FAILED tests/test_security_and_oracle.py::test_zero_oracle_leakage_participant_stack
+FAILED tests/test_security_and_oracle.py::test_token_and_secret_hygiene_in_db_and_logs
+FAILED tests/test_security_and_oracle.py::test_cross_team_tool_execution_rejection
+FAILED tests/test_task_timing.py::test_task_time_budget_enforcement_and_auto_timeout
+FAILED tests/test_team_isolation.py::test_concurrent_double_refund_race - ass...
+FAILED tests/test_team_isolation.py::test_concurrent_double_cancellation_race

@@ -1,0 +1,29 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.8, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\Pallavi\OneDrive\Desktop\agent_arena_
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collected 6 items
+
+tests\test_scoring_service.py F.F...                                     [100%]
+
+================================== FAILURES ===================================
+_______________________ test_score_submission_full_flow _______________________
+tests\test_scoring_service.py:181: in test_score_submission_full_flow
+    assert result.aggregate_score > 0.85
+E   AssertionError: assert 0.6075 > 0.85
+E    +  where 0.6075 = SubmissionScoreResult(submission_id='e7150dbb-8e24-4671-8ca1-98bfef745794', team_id='5a323cd3-453e-4a5b-9136-fdeae090d...ce': 0.9, 'confidence_valid': True, 'must_escalate': False, 'escalation_required': False, 'invalid_decision': False})]).aggregate_score
+___________________ test_early_finalization_scaling_defense ___________________
+tests\test_scoring_service.py:334: in test_early_finalization_scaling_defense
+    assert result.aggregate_score == pytest.approx(0.50, abs=0.05)
+E   assert 0.3187 == 0.5 ± 0.05
+E     
+E     comparison failed
+E     Obtained: 0.3187
+E     Expected: 0.5 ± 0.05
+=========================== short test summary info ===========================
+FAILED tests/test_scoring_service.py::test_score_submission_full_flow - Asser...
+FAILED tests/test_scoring_service.py::test_early_finalization_scaling_defense
+========================= 2 failed, 4 passed in 1.00s =========================
+

@@ -45,13 +45,13 @@ async def seeded_dataset(db_session: AsyncSession):
     for i in range(5):
         t_id = f"TASK-SEC-{i:03d}"
         world = generate_world(seed=7000 + i)
-        cust_id = world["customers"][0]["id"]
+        emp_id = world["directory"][0]["id"] if world.get("directory") else "EMP-1001"
         task = Task(
             task_id=t_id,
             dataset="hidden",
-            input_payload={"customer_id": cust_id, "customer_message": "Need refund urgently"},
+            input_payload={"customer_id": emp_id, "customer_message": "Need refund urgently", "message_id": f"MSG-{i:03d}"},
             world_state_seed=world,
-            ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1"]},
+            ground_truth={"expected_resolution": "allow", "must_escalate": False, "required_evidence": ["EMP-1001"]},
         )
         db_session.add(task)
     await settings.set("hidden_task_count", 5)
@@ -161,28 +161,22 @@ async def test_zero_oracle_leakage_participant_stack(client: AsyncClient, seeded
     customer_id = task_data["customer_id"]
 
     # 3. Read tools
-    resp_customer = await client.post("/tools/get_customer", json={"customer_id": customer_id}, headers=headers)
-    assert resp_customer.status_code == 200
-    assert_no_ground_truth_leakage(resp_customer.json(), "POST /tools/get_customer")
+    resp_directory = await client.post("/tools/lookup_directory", json={"identifier": customer_id}, headers=headers)
+    assert resp_directory.status_code == 200
+    assert_no_ground_truth_leakage(resp_directory.json(), "POST /tools/lookup_directory")
 
-    resp_search = await client.post(
-        "/tools/search_knowledge", json={"query": "refund policy", "top_k": 3}, headers=headers
-    )
-    assert resp_search.status_code == 200
-    assert_no_ground_truth_leakage(resp_search.json(), "POST /tools/search_knowledge")
-
-    resp_txns = await client.post("/tools/get_transactions", json={"customer_id": customer_id}, headers=headers)
-    assert resp_txns.status_code == 200
-    assert_no_ground_truth_leakage(resp_txns.json(), "POST /tools/get_transactions")
+    resp_domains = await client.post("/tools/get_approved_domains", json={}, headers=headers)
+    assert resp_domains.status_code == 200
+    assert_no_ground_truth_leakage(resp_domains.json(), "POST /tools/get_approved_domains")
 
     # 4. /task/submit
     submit_payload = {
         "task_id": task_id,
-        "case_classification": {"category": "billing", "issue": "refund", "severity": "medium"},
-        "decision": {"resolution": "refund", "escalation_required": False},
-        "evidence": [],
+        "case_classification": {"category": "cybersecurity_triage", "issue": "triage", "severity": "medium"},
+        "decision": {"resolution": "allow", "escalation_required": False},
+        "evidence": [customer_id],
         "uncertainties": [],
-        "customer_response": "Your refund is processed.",
+        "customer_response": "Allowed email.",
         "confidence": 0.90,
     }
     resp_submit = await client.post("/task/submit", json=submit_payload, headers=headers)
@@ -215,7 +209,7 @@ async def test_token_and_secret_hygiene_in_db_and_logs(client: AsyncClient, seed
     cust_id = task_res.json()["customer_id"]
 
     # Execute tool call
-    await client.post("/tools/get_customer", json={"customer_id": cust_id}, headers=headers)
+    await client.post("/tools/lookup_directory", json={"identifier": cust_id}, headers=headers)
 
     # Inspect tool call log in database
     team_id = team.team_id
@@ -253,10 +247,10 @@ async def test_cross_team_tool_execution_rejection(client: AsyncClient, seeded_d
     cust_id = task_res.json()["customer_id"]
 
     # Team A can call tools
-    res_a = await client.post("/tools/get_customer", json={"customer_id": cust_id}, headers=headers_a)
+    res_a = await client.post("/tools/lookup_directory", json={"identifier": cust_id}, headers=headers_a)
     assert res_a.status_code == 200
 
     # Team B has NOT started a task. Tool call must fail with 404 NO_ACTIVE_TASK
-    res_b = await client.post("/tools/get_customer", json={"customer_id": cust_id}, headers=headers_b)
+    res_b = await client.post("/tools/lookup_directory", json={"identifier": cust_id}, headers=headers_b)
     assert res_b.status_code == 404
     assert res_b.json()["detail"]["error"] == "NO_ACTIVE_TASK"

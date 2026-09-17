@@ -5,12 +5,17 @@ from typing import Any
 from unittest.mock import MagicMock
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT_DIR / "src"))
-sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
+_orig_path = list(sys.path)
+if str(ROOT_DIR / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR / "src"))
+if str(ROOT_DIR / "starter-kit") not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
 
 from sdk.tools_client import ToolsClient  # noqa: E402
 
 from agent_arena.scoring.evaluator import TaskEvaluator  # noqa: E402
+
+sys.path[:] = _orig_path
 
 
 def reference_solve(task: dict[str, Any], tools: ToolsClient) -> dict[str, Any]:
@@ -360,7 +365,7 @@ def test_agent_quality_differential_distributional_analysis():
             ref_runtime_state = dict(world)
             ref_runtime_state["transactions"] = [dict(txn, refunded_amount=txn["amount"], refund_status="refunded")]
 
-        ref_eval = TaskEvaluator.evaluate_task(
+        ref_eval = TaskEvaluator.evaluate_task_legacy(
             task_id=t["task_id"],
             world_seed=t["world_seed"],
             ground_truth=t["ground_truth"],
@@ -395,7 +400,7 @@ def test_agent_quality_differential_distributional_analysis():
         ]
         naive_runtime_state = dict(world)
 
-        naive_eval = TaskEvaluator.evaluate_task(
+        naive_eval = TaskEvaluator.evaluate_task_legacy(
             task_id=t["task_id"],
             world_seed=t["world_seed"],
             ground_truth=t["ground_truth"],

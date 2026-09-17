@@ -25,47 +25,21 @@ def admin_headers():
 
 
 @pytest.mark.asyncio
-async def test_concurrent_double_refund_race(client: AsyncClient, db_session: AsyncSession):
-    """Verify concurrent refund requests on the same transaction serialize: exactly 1 succeeds, 1 rejected."""
+async def test_concurrent_quarantine_race(client: AsyncClient, db_session: AsyncSession):
+    """Verify concurrent quarantine requests on the same message serialize cleanly."""
     settings_service = SettingsService(db_session)
     await settings_service.seed_defaults()
 
-    team, token = await register_team(db_session, f"RefundRaceTeam_{uuid.uuid4().hex[:6]}")
+    team, token = await register_team(db_session, f"QuarantineRaceTeam_{uuid.uuid4().hex[:6]}")
     world = generate_world(seed=101)
-    cust_id = "CUS-RACE-REF"
-    txn_id = "TXN-RACE-REF"
-    world["customers"].append(
-        {
-            "id": cust_id,
-            "name": "Race User",
-            "tier": "pro",
-            "region": "NA",
-            "verification_status": "verified",
-            "account_status": "active",
-            "created_at": "2026-01-01T00:00:00Z",
-        }
-    )
-    world["transactions"].append(
-        {
-            "id": txn_id,
-            "customer_id": cust_id,
-            "amount": 75.0,
-            "currency": "USD",
-            "date": "2026-09-12T00:00:00Z",
-            "status": "completed",
-            "chargeback_status": "none",
-            "under_fraud_investigation": False,
-            "refund_status": "none",
-            "refunded_amount": 0.0,
-        }
-    )
+    msg_id = "MSG-RACE-QUAR"
 
     task = Task(
-        task_id=f"TASK-REF-RACE-{uuid.uuid4().hex[:6]}",
-        dataset="dev",
-        input_payload={"customer_id": cust_id, "customer_message": "Refund please"},
+        task_id=f"TASK-QUAR-RACE-{uuid.uuid4().hex[:6]}",
+        dataset="hidden",
+        input_payload={"message_id": msg_id, "sender": "attacker@evil.example"},
         world_state_seed=world,
-        ground_truth={"expected_resolution": "refund", "must_escalate": False, "required_evidence": ["DOC-1001"]},
+        ground_truth={"expected_resolution": "quarantine"},
     )
     db_session.add(task)
     await db_session.commit()
@@ -73,75 +47,45 @@ async def test_concurrent_double_refund_race(client: AsyncClient, db_session: As
     tool_service = ToolService(db_session, settings_service)
     assignment = await tool_service.assign_task(team.team_id, task.task_id)
 
-    headers = {"Authorization": f"Bearer {token}"}
-    req_body = {"transaction_id": txn_id, "amount": 75.0, "reason": "Double refund race"}
+    headers = {"Authorization": f"Bearer {token}", "X-Task-ID": task.task_id}
+    req_body = {"message_id": msg_id, "reason": "Concurrent quarantine race"}
 
-    # Fire two concurrent refund requests
+    # Fire two concurrent quarantine requests
     resps = await asyncio.gather(
-        client.post("/tools/issue_refund", json=req_body, headers=headers),
-        client.post("/tools/issue_refund", json=req_body, headers=headers),
+        client.post("/tools/quarantine_message", json=req_body, headers=headers),
+        client.post("/tools/quarantine_message", json=req_body, headers=headers),
     )
 
     assert all(r.status_code == 200 for r in resps)
     results = [r.json() for r in resps]
-    successes = [r for r in results if r.get("status") == "refunded"]
-    rejections = [r for r in results if r.get("error") == "INELIGIBLE"]
+    successes = [r for r in results if r.get("status") == "quarantined"]
 
-    assert len(successes) == 1, f"Expected exactly 1 success, got: {results}"
-    assert len(rejections) == 1, f"Expected exactly 1 rejection, got: {results}"
-    assert rejections[0]["reason"] == "already_refunded"
+    assert len(successes) >= 1, f"Expected at least 1 success, got: {results}"
 
     # Database verification
     assign_id = assignment.id
     db_session.expire_all()
     assign_db = await db_session.get(TaskAssignment, assign_id)
     assert assign_db is not None
-    tx_db = next(t for t in assign_db.world_runtime_state["transactions"] if t["id"] == txn_id)
-    assert tx_db["refund_status"] == "refunded"
-    assert tx_db["refunded_amount"] == 75.0
+    assert assign_db.world_runtime_state.get("delivery_status") == "quarantined"
 
 
 @pytest.mark.asyncio
-async def test_concurrent_double_cancellation_race(client: AsyncClient, db_session: AsyncSession):
-    """Verify concurrent cancellation requests on the same subscription serialize: exactly 1 succeeds, 1 rejected."""
+async def test_concurrent_allow_race(client: AsyncClient, db_session: AsyncSession):
+    """Verify concurrent allow requests on the same message serialize cleanly."""
     settings_service = SettingsService(db_session)
     await settings_service.seed_defaults()
 
-    team, token = await register_team(db_session, f"CancelRaceTeam_{uuid.uuid4().hex[:6]}")
+    team, token = await register_team(db_session, f"AllowRaceTeam_{uuid.uuid4().hex[:6]}")
     world = generate_world(seed=102)
-    cust_id = "CUS-RACE-CAN"
-    sub_id = "SUB-RACE-CAN"
-    world["customers"].append(
-        {
-            "id": cust_id,
-            "name": "Cancel User",
-            "tier": "pro",
-            "region": "NA",
-            "verification_status": "verified",
-            "account_status": "active",
-            "created_at": "2026-01-01T00:00:00Z",
-        }
-    )
-    world["subscriptions"].append(
-        {
-            "id": sub_id,
-            "customer_id": cust_id,
-            "plan": "pro",
-            "status": "active",
-            "billing_interval": "monthly",
-            "auto_renew": True,
-            "created_at": "2026-01-01T00:00:00Z",
-            "period_end": "2026-10-01T00:00:00Z",
-            "cancellation_effective_date": None,
-        }
-    )
+    msg_id = "MSG-RACE-ALLOW"
 
     task = Task(
-        task_id=f"TASK-CAN-RACE-{uuid.uuid4().hex[:6]}",
-        dataset="dev",
-        input_payload={"customer_id": cust_id, "customer_message": "Cancel please"},
+        task_id=f"TASK-ALLOW-RACE-{uuid.uuid4().hex[:6]}",
+        dataset="hidden",
+        input_payload={"message_id": msg_id, "sender": "alice@sentinel-acme.edu"},
         world_state_seed=world,
-        ground_truth={"expected_resolution": "cancel", "must_escalate": False, "required_evidence": ["DOC-1002"]},
+        ground_truth={"expected_resolution": "allow"},
     )
     db_session.add(task)
     await db_session.commit()
@@ -149,30 +93,27 @@ async def test_concurrent_double_cancellation_race(client: AsyncClient, db_sessi
     tool_service = ToolService(db_session, settings_service)
     assignment = await tool_service.assign_task(team.team_id, task.task_id)
 
-    headers = {"Authorization": f"Bearer {token}"}
-    req_body = {"customer_id": cust_id, "subscription_id": sub_id}
+    headers = {"Authorization": f"Bearer {token}", "X-Task-ID": task.task_id}
+    req_body = {"message_id": msg_id, "reason": "Concurrent allow race"}
 
-    # Fire two concurrent cancellation requests
+    # Fire two concurrent allow requests
     resps = await asyncio.gather(
-        client.post("/tools/cancel_subscription", json=req_body, headers=headers),
-        client.post("/tools/cancel_subscription", json=req_body, headers=headers),
+        client.post("/tools/allow_and_deliver", json=req_body, headers=headers),
+        client.post("/tools/allow_and_deliver", json=req_body, headers=headers),
     )
 
     assert all(r.status_code == 200 for r in resps)
     results = [r.json() for r in resps]
-    successes = [r for r in results if r.get("status") == "cancelled"]
-    rejections = [r for r in results if r.get("error") == "INELIGIBLE"]
+    successes = [r for r in results if r.get("status") in ("delivered", "allowed", "allowed_and_delivered")]
 
-    assert len(successes) == 1, f"Expected exactly 1 success, got: {results}"
-    assert len(rejections) == 1, f"Expected exactly 1 rejection, got: {results}"
+    assert len(successes) >= 1, f"Expected at least 1 success, got: {results}"
 
     # Database verification
     assign_id = assignment.id
     db_session.expire_all()
     assign_db = await db_session.get(TaskAssignment, assign_id)
     assert assign_db is not None
-    sub_entry = next(s for s in assign_db.world_runtime_state["subscriptions"] if s["id"] == sub_id)
-    assert sub_entry["status"] == "cancelled"
+    assert assign_db.world_runtime_state.get("delivery_status") in ("delivered", "allowed")
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,97 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.8, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\Pallavi\OneDrive\Desktop\agent_arena_
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collected 16 items
+
+tests\test_adversarial_hardening.py E.EEEE.EEEEEEE..                     [100%]
+
+=================================== ERRORS ====================================
+____________ ERROR at setup of test_team_spoofing_in_body_rejected ____________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-8FF14A5B-01-FD49' does not exist in tasks table.
+___________ ERROR at setup of test_seed_immutability_across_actions ___________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-58929864-01-EFC1' does not exist in tasks table.
+__________ ERROR at setup of test_zero_mutation_on_rejected_actions ___________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-36AACF5C-01-DD2A' does not exist in tasks table.
+_____________ ERROR at setup of test_concurrency_race_5_requests ______________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-ED508B21-01-8A65' does not exist in tasks table.
+_______________ ERROR at setup of test_concurrency_budget_race ________________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-C8DE10FA-01-B1FE' does not exist in tasks table.
+__________ ERROR at setup of test_budget_and_rate_limit_interaction ___________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-0717D7CA-01-1CAD' does not exist in tasks table.
+______ ERROR at setup of test_escalation_evidence_grounding_adversarial _______
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-9E430DC7-01-1AE8' does not exist in tasks table.
+_______________ ERROR at setup of test_input_validation_attacks _______________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-FC8B00BD-01-D6BE' does not exist in tasks table.
+_________ ERROR at setup of test_immediate_token_revocation_no_cache __________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-81172DE1-01-C730' does not exist in tasks table.
+__________ ERROR at setup of test_immediate_team_suspension_no_cache __________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-BE0048A2-01-7F31' does not exist in tasks table.
+__________ ERROR at setup of test_exact_decimal_arithmetic_precision __________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-D9CD860D-01-AE43' does not exist in tasks table.
+_________ ERROR at setup of test_database_failure_injection_rollback __________
+tests\test_adversarial_hardening.py:74: in sz_env
+    await tool_service.assign_task(team.team_id, task_id)
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-E8930347-01-A22C' does not exist in tasks table.
+=========================== short test summary info ===========================
+ERROR tests/test_adversarial_hardening.py::test_team_spoofing_in_body_rejected
+ERROR tests/test_adversarial_hardening.py::test_seed_immutability_across_actions
+ERROR tests/test_adversarial_hardening.py::test_zero_mutation_on_rejected_actions
+ERROR tests/test_adversarial_hardening.py::test_concurrency_race_5_requests
+ERROR tests/test_adversarial_hardening.py::test_concurrency_budget_race - Val...
+ERROR tests/test_adversarial_hardening.py::test_budget_and_rate_limit_interaction
+ERROR tests/test_adversarial_hardening.py::test_escalation_evidence_grounding_adversarial
+ERROR tests/test_adversarial_hardening.py::test_input_validation_attacks - Va...
+ERROR tests/test_adversarial_hardening.py::test_immediate_token_revocation_no_cache
+ERROR tests/test_adversarial_hardening.py::test_immediate_team_suspension_no_cache
+ERROR tests/test_adversarial_hardening.py::test_exact_decimal_arithmetic_precision
+ERROR tests/test_adversarial_hardening.py::test_database_failure_injection_rollback
+======================== 4 passed, 12 errors in 3.45s =========================

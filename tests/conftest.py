@@ -138,6 +138,32 @@ class WorldGenerator:
         documents = [d for d in POLICIES if d.get("id") in ("DOC-2001", "DOC-2002")]
         policies = copy.deepcopy(POLICIES)
 
+        directory = [
+            {
+                "id": c["id"],
+                "full_name": c["name"],
+                "official_email": c["email"],
+                "department": "Engineering",
+                "job_title": "Software Engineer",
+                "role_level": "standard",
+                "manager_email": "manager@sentinel-acme.edu",
+                "employment_status": "active",
+                "mfa_enabled": True,
+                "created_at": c["created_at"],
+            }
+            for c in customers
+        ]
+
+        domains = [
+            {
+                "domain_id": "DOM-1001",
+                "domain_name": "sentinel-acme.edu",
+                "domain_type": "official",
+                "reputation": "trusted",
+                "threat_score": 0,
+            }
+        ]
+
         return {
             "seed": self.seed,
             "current_date": self.current_date.isoformat(),
@@ -149,6 +175,13 @@ class WorldGenerator:
             "historical_cases": historical_cases,
             "verification_requests": [],
             "escalations": [],
+            "directory": directory,
+            "domains": domains,
+            "threat_intel": [],
+            "security_policies": policies,
+            "historical_threats": [],
+            "threads": [],
+            "actions_taken": [],
         }
 
     def _generate_customers(self, count: int) -> list[dict[str, Any]]:

@@ -131,6 +131,9 @@ class DatasetService:
         replace_existing: bool = True,
     ) -> dict[str, Any]:
         """Loads canonical pre-generated static tasks into the PostgreSQL tasks table."""
+        if dataset_type == "dev":
+            raise ValueError("Loading 'dev' dataset into live platform is disallowed. Only 'hidden' dataset is supported.")
+
         raw_tasks = load_canonical_tasks(DATA_DIR, dataset_type)
         if not raw_tasks:
             raise FileNotFoundError(f"No task files found in {DATA_DIR}")
