@@ -27,22 +27,36 @@ def merge_entities_by_key(
     return list(merged.values())
 
 
-def load_canonical_tasks(data_dir: Path) -> list[dict[str, Any]]:
+def load_canonical_tasks(data_dir: Path, dataset_type: str | None = None) -> list[dict[str, Any]]:
     """Loads modular tasks, ground truth, and base entity catalogs from data_dir."""
-    tasks_file = data_dir / "tasks.json"
-    gt_file = data_dir / "ground_truth.json"
+    files_to_load: list[tuple[str, str]] = []
+    if dataset_type == "dev":
+        files_to_load = [("tasks.json", "ground_truth.json")]
+    elif dataset_type == "hidden":
+        files_to_load = [("tasks_hidden.json", "ground_truth_hidden.json")]
+    else:
+        if (data_dir / "tasks.json").exists():
+            files_to_load.append(("tasks.json", "ground_truth.json"))
+        if (data_dir / "tasks_hidden.json").exists():
+            files_to_load.append(("tasks_hidden.json", "ground_truth_hidden.json"))
 
-    if not tasks_file.exists():
-        raise FileNotFoundError(f"tasks.json not found in {data_dir}")
+    if not files_to_load:
+        raise FileNotFoundError(f"No task files found in {data_dir}")
 
-    with open(tasks_file, "r", encoding="utf-8") as f:
-        tasks = json.load(f)
+    tasks: list[dict[str, Any]] = []
+    gt_map: dict[str, dict[str, Any]] = {}
 
-    gt_map = {}
-    if gt_file.exists():
-        with open(gt_file, "r", encoding="utf-8") as f:
-            gts = json.load(f)
-            gt_map = {g["task_id"]: g for g in gts}
+    for t_fname, gt_fname in files_to_load:
+        t_path = data_dir / t_fname
+        gt_path = data_dir / gt_fname
+        if t_path.exists():
+            with open(t_path, "r", encoding="utf-8") as f:
+                tasks.extend(json.load(f))
+        if gt_path.exists():
+            with open(gt_path, "r", encoding="utf-8") as f:
+                gts = json.load(f)
+                for g in gts:
+                    gt_map[g["task_id"]] = g
 
     def _read_json(fname: str) -> list[dict[str, Any]]:
         p = data_dir / fname
@@ -51,11 +65,13 @@ def load_canonical_tasks(data_dir: Path) -> list[dict[str, Any]]:
                 return json.load(f)
         return []
 
-    customers = _read_json("customers.json")
-    transactions = _read_json("transactions.json")
-    subscriptions = _read_json("subscriptions.json")
-    policies = _read_json("policies.json")
-    previous_cases = _read_json("previous_cases.json")
+    directory = _read_json("directory.json")
+    domains = _read_json("domains.json")
+    threat_intel = _read_json("threat_intel.json")
+    security_policies = _read_json("security_policies.json")
+    if not security_policies:
+        security_policies = _read_json("policies.json")
+    historical_threats = _read_json("historical_threats.json")
 
     compiled_tasks = []
     for t in tasks:
@@ -67,34 +83,31 @@ def load_canonical_tasks(data_dir: Path) -> list[dict[str, Any]]:
         world = {
             "seed": 50000,
             "current_date": "2026-09-15T00:00:00+00:00",
-            "customers": copy.deepcopy(customers),
-            "transactions": copy.deepcopy(transactions),
-            "subscriptions": copy.deepcopy(subscriptions),
-            "policies": copy.deepcopy(policies),
-            "documents": copy.deepcopy(policies),
-            "historical_cases": copy.deepcopy(previous_cases),
-            "previous_cases": copy.deepcopy(previous_cases),
-            "verification_requests": [],
-            "escalations": [],
-            "target_customer_id": inp.get("customer_id", ""),
+            "directory": copy.deepcopy(directory),
+            "domains": copy.deepcopy(domains),
+            "threat_intel": copy.deepcopy(threat_intel),
+            "security_policies": copy.deepcopy(security_policies),
+            "policies": copy.deepcopy(security_policies),
+            "historical_threats": copy.deepcopy(historical_threats),
+            "threads": copy.deepcopy(overrides.get("threads", [])),
+            "actions_taken": [],
+            "target_message_id": inp.get("message_id", ""),
+            "target_thread_id": inp.get("thread_id", ""),
         }
 
-        if "customers" in overrides:
-            world["customers"] = merge_entities_by_key(world["customers"], overrides["customers"], "id")
-        if "transactions" in overrides:
-            world["transactions"] = merge_entities_by_key(world["transactions"], overrides["transactions"], "id")
-        if "subscriptions" in overrides:
-            world["subscriptions"] = merge_entities_by_key(world["subscriptions"], overrides["subscriptions"], "id")
-        if "policies" in overrides:
-            world["policies"] = merge_entities_by_key(world["policies"], overrides["policies"], "id")
-            world["documents"] = merge_entities_by_key(world["documents"], overrides["policies"], "id")
-        if "previous_cases" in overrides:
-            world["previous_cases"] = merge_entities_by_key(world["previous_cases"], overrides["previous_cases"], "case_id")
-            world["historical_cases"] = merge_entities_by_key(world["historical_cases"], overrides["previous_cases"], "case_id")
+        if "directory" in overrides:
+            world["directory"] = merge_entities_by_key(world["directory"], overrides["directory"], "id")
+        if "domains" in overrides:
+            world["domains"] = merge_entities_by_key(world["domains"], overrides["domains"], "domain_id")
+        if "threat_intel" in overrides:
+            world["threat_intel"] = merge_entities_by_key(world["threat_intel"], overrides["threat_intel"], "domain_id")
+        if "security_policies" in overrides:
+            world["security_policies"] = merge_entities_by_key(world["security_policies"], overrides["security_policies"], "id")
+            world["policies"] = copy.deepcopy(world["security_policies"])
 
         compiled_tasks.append({
             "task_id": tid,
-            "dataset": t.get("dataset", "hidden"),
+            "dataset": t.get("dataset", "dev"),
             "input_payload": inp,
             "world_state_seed": world,
             "ground_truth": gt,
@@ -117,31 +130,24 @@ class DatasetService:
         base_seed: int | None = None,
         replace_existing: bool = True,
     ) -> dict[str, Any]:
-        """Loads canonical pre-generated static tasks into the PostgreSQL tasks table.
-
-        Zero runtime seed generation: every team is evaluated on the exact same
-        canonical fixed tasks and world state.
-        """
-        if dataset_type != "hidden":
-            raise ValueError(
-                f"Live Agent Arena platform only supports the 'hidden' competition dataset (got '{dataset_type}'). "
-                f"Development tasks are isolated to the mock simulator."
-            )
-
-        raw_tasks = load_canonical_tasks(DATA_DIR)
+        """Loads canonical pre-generated static tasks into the PostgreSQL tasks table."""
+        raw_tasks = load_canonical_tasks(DATA_DIR, dataset_type)
         if not raw_tasks:
             raise FileNotFoundError(f"No task files found in {DATA_DIR}")
 
-        # Pull target count from settings service if not passed
+        # Filter by dataset type if specified
+        matching_tasks = [t for t in raw_tasks if t.get("dataset") == dataset_type]
+        if not matching_tasks:
+            matching_tasks = raw_tasks
+
         if count is None:
-            setting_key = "hidden_task_count"
+            setting_key = f"{dataset_type}_task_count"
             count = await self.settings_service.get(setting_key)
             if count is None:
-                count = len(raw_tasks)
+                count = len(matching_tasks)
 
-        tasks_to_load = raw_tasks[:count] if count is not None else raw_tasks
+        tasks_to_load = matching_tasks[:count] if count is not None else matching_tasks
 
-        # Load into PostgreSQL tasks table
         now = datetime.now(UTC)
         loaded_count = 0
 
@@ -163,7 +169,7 @@ class DatasetService:
             for t in tasks_to_load:
                 gt = t.get("ground_truth", {})
                 classification = gt.get("classification", {}) if isinstance(gt, dict) else {}
-                family = t.get("family") or classification.get("category") or "general"
+                family = t.get("family") or classification.get("category") or "cybersecurity_triage"
                 variant = t.get("variant") or classification.get("issue") or "standard"
 
                 task_model = Task(

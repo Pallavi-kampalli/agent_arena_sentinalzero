@@ -4,17 +4,17 @@ from typing import Any
 
 
 class ResolutionType(str, Enum):
-    REFUND = "refund"
-    DENY = "deny"
+    ALLOW = "allow"
+    WARN = "warn"
+    QUARANTINE = "quarantine"
     ESCALATE = "escalate"
-    REQUEST_INFO = "request_info"
 
 
 class ActionType(str, Enum):
-    ISSUE_REFUND = "issue_refund"
-    CANCEL_SUBSCRIPTION = "cancel_subscription"
-    ESCALATE_CASE = "escalate_case"
-    REQUEST_VERIFICATION = "request_verification"
+    ALLOW_AND_DELIVER = "allow_and_deliver"
+    APPLY_WARNING_BANNER = "apply_warning_banner"
+    QUARANTINE_MESSAGE = "quarantine_message"
+    ESCALATE_TO_TIER2_SOC = "escalate_to_tier2_soc"
     NONE = "none"
 
 
@@ -46,15 +46,19 @@ class GroundTruth:
     expected_end_state: dict[str, Any]
     classification: dict[str, str] = field(
         default_factory=lambda: {
-            "category": "billing",
-            "issue": "general",
+            "category": "cybersecurity_triage",
+            "issue": "triage",
             "severity": "medium",
         }
     )
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "expected_resolution": self.expected_resolution.value,
+            "expected_resolution": (
+                self.expected_resolution.value
+                if isinstance(self.expected_resolution, Enum)
+                else str(self.expected_resolution)
+            ),
             "must_escalate": self.must_escalate,
             "required_evidence": sorted(list(set(self.required_evidence))),
             "expected_action": self.expected_action,

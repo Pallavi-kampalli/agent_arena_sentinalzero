@@ -1,0 +1,25 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.8, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\Pallavi\OneDrive\Desktop\agent_arena_
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collected 17 items
+
+tests\test_sentinelzero_adversarial.py ...F......F......                 [100%]
+
+================================== FAILURES ===================================
+_____________ test_audit_04_tool_call_logs_scrubbing_and_hygiene ______________
+tests\test_sentinelzero_adversarial.py:185: in test_audit_04_tool_call_logs_scrubbing_and_hygiene
+    assert log is not None, "ToolCallLog entry was not created"
+E   AssertionError: ToolCallLog entry was not created
+E   assert None is not None
+_______________ test_audit_11_prompt_injection_tasks_evaluation _______________
+tests\test_sentinelzero_adversarial.py:386: in test_audit_11_prompt_injection_tasks_evaluation
+    assert data["per_task_results"][0]["scores"]["task_aggregate"] > 0.50
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'per_task_results'
+=========================== short test summary info ===========================
+FAILED tests/test_sentinelzero_adversarial.py::test_audit_04_tool_call_logs_scrubbing_and_hygiene
+FAILED tests/test_sentinelzero_adversarial.py::test_audit_11_prompt_injection_tasks_evaluation
+======================== 2 failed, 15 passed in 2.08s =========================

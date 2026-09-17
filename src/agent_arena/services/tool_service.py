@@ -1,4 +1,5 @@
 import copy
+import re
 import time
 import uuid
 from datetime import UTC, datetime
@@ -11,9 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from agent_arena.domain.rules import (
     apply_action_to_world,
-    check_cancellation_eligibility,
     check_escalation_validity,
-    check_refund_eligibility,
     parse_iso,
 )
 from agent_arena.models.submission import Submission
@@ -22,12 +21,16 @@ from agent_arena.models.task_assignment import TaskAssignment
 from agent_arena.models.team import Team
 from agent_arena.models.tool_call_log import ToolCallLog
 from agent_arena.schemas.tools import (
-    CancelSubscriptionSuccessResponse,
-    EscalateCaseSuccessResponse,
-    IneligibleResponse,
+    AllowAndDeliverResponse,
+    ApplyWarningBannerResponse,
+    EscalateToTier2SocResponse,
+    GetApprovedDomainsResponse,
+    GetEmailHeadersResponse,
+    GetThreadHistoryResponse,
+    InspectDomainReputationResponse,
     InvalidEscalationResponse,
-    RefundSuccessResponse,
-    RequestVerificationSuccessResponse,
+    LookupDirectoryResponse,
+    QuarantineMessageResponse,
 )
 from agent_arena.services.locks import get_team_lock
 from agent_arena.services.rate_limiter import ToolLimiter
@@ -35,12 +38,12 @@ from agent_arena.services.settings_service import SettingsService
 
 
 class ToolService:
-    """Core tool execution runtime for all 10 SupportOps tools.
+    """Core tool execution runtime for all 9 SentinelZero tools.
 
     Guarantees:
     - Team and task runtime isolation (all calls resolve against active TaskAssignment)
     - Monotonic hierarchical row-level locking: Level 1 (Team) -> Level 2 (Submission) -> Level 3 (TaskAssignment)
-    - Canonical rule enforcement (zero duplicate eligibility logic)
+    - Canonical rule enforcement
     - State immutability on enforcement rejection
     - Comprehensive tool call logging with latency tracking and token scrubbing
     """
@@ -55,18 +58,13 @@ class ToolService:
         task_id: str | None = None,
         for_update: bool = False,
     ) -> TaskAssignment:
-        """Resolves the currently active TaskAssignment for an authenticated team.
-
-        Acquires locks monotonically: Level 2 (Submission) -> Level 3 (TaskAssignment).
-        """
+        """Resolves the currently active TaskAssignment for an authenticated team."""
         sub = None
-        # 1. Level 2: Active Submission row
         sub_stmt = sa.select(Submission).where(Submission.team_id == team_id, Submission.status == "in_progress")
         if for_update:
             sub_stmt = sub_stmt.with_for_update()
         sub = (await self.session.execute(sub_stmt)).scalar_one_or_none()
 
-        # 2. Level 3: TaskAssignment row
         if sub:
             if task_id:
                 stmt = sa.select(TaskAssignment).where(
@@ -146,7 +144,6 @@ class ToolService:
                 },
             )
 
-        # Enforce submission lifecycle when assignment is part of a submission
         if assignment.submission_id is not None:
             if not sub:
                 sub = await self.session.get(Submission, assignment.submission_id)
@@ -160,7 +157,6 @@ class ToolService:
                     },
                 )
 
-            # Check if task was already submitted or timed out
             for r in sub.per_task_results or []:
                 if isinstance(r, dict) and r.get("task_id") == assignment.task_id:
                     if r.get("status") == "completed":
@@ -180,7 +176,6 @@ class ToolService:
                             },
                         )
 
-            # Check time budget against server time
             time_budget = await self.settings_service.get("time_budget_per_task_seconds", 180)
             now = datetime.now(UTC)
             assign_time = (
@@ -219,15 +214,13 @@ class ToolService:
         task_id: str,
         submission_id: uuid.UUID | None = None,
     ) -> TaskAssignment:
-        """Assigns a task to a team, copying tasks.world_state_seed to task_assignments.world_runtime_state."""
+        """Assigns a task to a team."""
         task_res = await self.session.execute(sa.select(Task).where(Task.task_id == task_id))
         task = task_res.scalar_one_or_none()
         if not task:
             raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
 
-        # Create isolated mutable runtime state
         runtime_state = copy.deepcopy(task.world_state_seed)
-
         assignment = TaskAssignment(
             team_id=team_id,
             task_id=task_id,
@@ -245,7 +238,7 @@ class ToolService:
         team_id: uuid.UUID,
         task_id: str,
     ) -> set[str]:
-        """Extracts all evidence/entity IDs returned to this team in this task via tool_call_logs."""
+        """Extracts all evidence IDs (EMP-*, DOM-*, MSG-*, THR-*, POL-*, LOG-*) returned to team in tool_call_logs."""
         stmt = (
             sa.select(ToolCallLog)
             .where(
@@ -257,380 +250,239 @@ class ToolService:
         logs = (await self.session.execute(stmt)).scalars().all()
 
         retrieved: set[str] = set()
+        pattern = re.compile(r"\b(EMP-\w+|DOM-\w+|MSG-\w+|THR-\w+|POL-\w+|LOG-\w+)\b")
+
         for log in logs:
             resp = log.response_payload or {}
-            # Check results from search_knowledge
-            for item in resp.get("results", []):
-                if isinstance(item, dict) and "id" in item:
-                    retrieved.add(item["id"])
-
-            # Check document from get_document
-            doc = resp.get("document")
-            if isinstance(doc, dict) and "id" in doc:
-                retrieved.add(doc["id"])
-
-            # Check customer from get_customer
-            cust = resp.get("customer")
-            if isinstance(cust, dict) and "id" in cust:
-                retrieved.add(cust["id"])
-
-            # Check transactions from get_transactions
-            for tx in resp.get("transactions", []):
-                if isinstance(tx, dict):
-                    if "id" in tx:
-                        retrieved.add(tx["id"])
-                    if "invoice_id" in tx:
-                        retrieved.add(tx["invoice_id"])
-
-            # Check subscription from get_subscription
-            sub = resp.get("subscription")
-            if isinstance(sub, dict) and "id" in sub:
-                retrieved.add(sub["id"])
-
-            # Check cases from get_previous_cases
-            for c in resp.get("cases", []):
-                if isinstance(c, dict):
-                    if "case_id" in c:
-                        retrieved.add(c["case_id"])
-                    if "id" in c:
-                        retrieved.add(c["id"])
-                    for eid in c.get("evidence_used", []):
-                        retrieved.add(eid)
-
-            # Check transaction from issue_refund
-            tx_ref = resp.get("transaction")
-            if isinstance(tx_ref, dict) and "id" in tx_ref:
-                retrieved.add(tx_ref["id"])
-
-            # Check policy_ref from ineligibility response
-            if resp.get("policy_ref"):
-                retrieved.add(resp["policy_ref"])
+            resp_str = str(resp)
+            matches = pattern.findall(resp_str)
+            for m in matches:
+                retrieved.add(m)
 
         return retrieved
 
     # =========================================================================
-    # Read Tool Implementations (Pure state reads against runtime state)
+    # SentinelZero Read Tools (5 Endpoints)
     # =========================================================================
 
-    def execute_search_knowledge(
+    def execute_lookup_directory(
         self,
         world_state: dict[str, Any],
-        query: str,
-        top_k: int,
+        identifier: str,
     ) -> dict[str, Any]:
-        """Searches policies and documents in current world runtime state."""
-        all_docs = []
-        seen_ids = set()
-        for pol in world_state.get("policies", []):
-            if isinstance(pol, dict) and pol.get("id") and pol["id"] not in seen_ids:
-                seen_ids.add(pol["id"])
-                all_docs.append(pol)
-        for doc in world_state.get("documents", []):
-            if isinstance(doc, dict) and doc.get("id") and doc["id"] not in seen_ids:
-                seen_ids.add(doc["id"])
-                all_docs.append(doc)
+        """Look up an employee by email or employee ID."""
+        ident_clean = identifier.strip().lower()
+        directory = world_state.get("directory", [])
 
-        query_tokens = [w.lower() for w in query.split() if len(w) > 1]
-        scored_docs = []
-
-        for d in all_docs:
-            title = d.get("title", "").lower()
-            content = d.get("content", "").lower()
-            doc_id = d.get("id", "").lower()
-            category = d.get("category", "").lower()
-
-            score = 0
-            # Exact substring match bonus
-            if query.lower() in title or query.lower() in content:
-                score += 10
-
-            for token in query_tokens:
-                if token in doc_id:
-                    score += 8
-                if token in title:
-                    score += 5
-                if token in category:
-                    score += 3
-                if token in content:
-                    score += 1
-
-            if score > 0 or not query_tokens:
-                # Snippet truncation
-                full_content = d.get("content", "")
-                snippet = full_content[:300] + ("..." if len(full_content) > 300 else "")
-                scored_docs.append(
-                    (
-                        score,
-                        parse_iso(d.get("updated_at", "1970-01-01T00:00:00Z")),
-                        d["id"],
-                        {
-                            "id": d["id"],
-                            "title": d.get("title", ""),
-                            "snippet": snippet,
-                            "updated_at": d.get("updated_at", ""),
-                            "category": d.get("category", "general"),
-                        },
-                    )
-                )
-
-        # Sort by score desc, then updated_at desc, then doc_id asc for deterministic tie-breaking
-        scored_docs.sort(key=lambda x: (-x[0], -x[1].timestamp(), x[2]))
-        results = [item[3] for item in scored_docs[:top_k]]
-        return {"results": results}
-
-    def execute_get_document(
-        self,
-        world_state: dict[str, Any],
-        document_id: str,
-    ) -> dict[str, Any]:
-        """Fetches full policy or document by document_id."""
-        for pol in world_state.get("policies", []):
-            if pol.get("id") == document_id:
-                return {"document": pol}
-        for doc in world_state.get("documents", []):
-            if doc.get("id") == document_id:
-                return {"document": doc}
-
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "error": "DOCUMENT_NOT_FOUND",
-                "message": f"Document '{document_id}' not found in task knowledge base.",
-            },
-        )
-
-    def execute_get_customer(
-        self,
-        world_state: dict[str, Any],
-        customer_id: str,
-    ) -> dict[str, Any]:
-        """Fetches customer record by customer_id."""
-        for cust in world_state.get("customers", []):
-            if cust.get("id") == customer_id:
-                return {"customer": cust}
-
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "error": "CUSTOMER_NOT_FOUND",
-                "message": f"Customer '{customer_id}' not found in account records.",
-            },
-        )
-
-    def execute_get_transactions(
-        self,
-        world_state: dict[str, Any],
-        customer_id: str,
-        start_date: str | None,
-        end_date: str | None,
-    ) -> dict[str, Any]:
-        """Fetches customer transactions with optional inclusive date bounds."""
-        # 1. Verify customer exists
-        cust_exists = any(c.get("id") == customer_id for c in world_state.get("customers", []))
-        if not cust_exists:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "CUSTOMER_NOT_FOUND",
-                    "message": f"Customer '{customer_id}' not found.",
-                },
-            )
-
-        # 2. Parse date bounds if provided
-        start_dt = None
-        end_dt = None
-        if start_date:
-            try:
-                start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-                if start_dt.tzinfo is None:
-                    start_dt = start_dt.replace(tzinfo=UTC)
-                start_dt = start_dt.astimezone(UTC)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail={"error": "INVALID_DATE_FORMAT", "message": f"Invalid start_date '{start_date}': {e}"},
-                )
-        if end_date:
-            try:
-                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-                if end_dt.tzinfo is None:
-                    end_dt = end_dt.replace(tzinfo=UTC)
-                end_dt = end_dt.astimezone(UTC)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail={"error": "INVALID_DATE_FORMAT", "message": f"Invalid end_date '{end_date}': {e}"},
-                )
-
-        if start_dt and end_dt and start_dt > end_dt:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail={
-                    "error": "INVALID_DATE_RANGE",
-                    "message": f"start_date '{start_date}' cannot be after end_date '{end_date}'.",
-                },
-            )
-
-        # 3. Filter customer transactions
-        txs = [t for t in world_state.get("transactions", []) if t.get("customer_id") == customer_id]
-        filtered = []
-        for t in txs:
-            t_dt = parse_iso(t.get("date", "1970-01-01T00:00:00Z"))
-            if start_dt and t_dt < start_dt:
+        for emp in directory:
+            if not isinstance(emp, dict):
                 continue
-            if end_dt and t_dt > end_dt:
-                continue
-            filtered.append(t)
+            if (
+                emp.get("official_email", "").strip().lower() == ident_clean
+                or emp.get("id", "").strip().lower() == ident_clean
+                or emp.get("name", "").strip().lower() == ident_clean
+            ):
+                return LookupDirectoryResponse(found=True, employee=emp).model_dump()
 
-        # Sort descending by date
-        filtered.sort(key=lambda t: parse_iso(t.get("date", "1970-01-01T00:00:00Z")), reverse=True)
-        return {"transactions": filtered}
+        return LookupDirectoryResponse(found=False, employee=None).model_dump()
 
-    def execute_get_subscription(
+    def execute_get_approved_domains(
         self,
         world_state: dict[str, Any],
-        customer_id: str,
     ) -> dict[str, Any]:
-        """Fetches customer subscription or null if customer has no subscription."""
-        cust_exists = any(c.get("id") == customer_id for c in world_state.get("customers", []))
-        if not cust_exists:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "CUSTOMER_NOT_FOUND",
-                    "message": f"Customer '{customer_id}' not found.",
-                },
-            )
+        """Retrieves official and partner domain lists."""
+        domains = world_state.get("domains", [])
+        official = [d["domain"] for d in domains if isinstance(d, dict) and d.get("category") == "official"]
+        partner = [d["domain"] for d in domains if isinstance(d, dict) and d.get("category") == "partner"]
+        return GetApprovedDomainsResponse(official_domains=official, partner_domains=partner).model_dump()
 
-        for sub in world_state.get("subscriptions", []):
-            if sub.get("customer_id") == customer_id:
-                return {"subscription": sub}
-
-        return {"subscription": None}
-
-    def execute_get_previous_cases(
+    def execute_get_email_headers(
         self,
         world_state: dict[str, Any],
-        customer_id: str,
-        limit: int,
+        message_id: str,
     ) -> dict[str, Any]:
-        """Fetches historical cases for customer."""
-        cust_exists = any(c.get("id") == customer_id for c in world_state.get("customers", []))
-        if not cust_exists:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "CUSTOMER_NOT_FOUND",
-                    "message": f"Customer '{customer_id}' not found.",
-                },
-            )
+        """Inspects email security headers and authentication results."""
+        # Find message in world state (check target or threads)
+        msg_id_clean = message_id.strip()
 
-        cases = [c for c in world_state.get("historical_cases", []) if c.get("customer_id") == customer_id]
-        cases.sort(key=lambda c: parse_iso(c.get("date", "1970-01-01T00:00:00Z")), reverse=True)
-        return {"cases": cases[:limit]}
+        # Check if message is target message or in threads
+        matching_msg = None
+        target_msg_id = world_state.get("target_message_id")
+        
+        # Check thread history
+        for thr in world_state.get("threads", []):
+            if isinstance(thr, dict):
+                for m in thr.get("messages", []):
+                    if isinstance(m, dict) and m.get("message_id") == msg_id_clean:
+                        matching_msg = m
+                        break
+
+        # Check directory / domain context to build headers if matching target
+        sender = matching_msg.get("sender") if matching_msg else None
+        
+        # Build synthetic authentication headers based on domain reputation
+        from_domain = sender.split("@")[-1] if sender and "@" in sender else "unknown.com"
+        
+        # Check domain category
+        domains = world_state.get("domains", [])
+        threat_intel = world_state.get("threat_intel", [])
+        
+        is_official = any(d.get("domain") == from_domain and d.get("category") == "official" for d in domains if isinstance(d, dict))
+        threat_record = next((t for t in threat_intel if isinstance(t, dict) and t.get("domain") == from_domain), None)
+
+        if is_official:
+            auth_results = {"spf": "pass", "dkim": "pass", "dmarc": "pass"}
+        elif threat_record and threat_record.get("reputation") == "malicious":
+            auth_results = {"spf": "fail", "dkim": "fail", "dmarc": "fail"}
+        else:
+            auth_results = {"spf": "none", "dkim": "none", "dmarc": "none"}
+
+        return GetEmailHeadersResponse(
+            message_id=msg_id_clean,
+            from_header=sender or f"sender@{from_domain}",
+            reply_to=sender or f"sender@{from_domain}",
+            return_path=sender or f"sender@{from_domain}",
+            originating_ip="192.0.2.45",
+            originating_domain=from_domain,
+            auth_results=auth_results,
+        ).model_dump()
+
+    def execute_inspect_domain_reputation(
+        self,
+        world_state: dict[str, Any],
+        domain: str,
+    ) -> dict[str, Any]:
+        """Inspects domain reputation from threat intel and domain registry."""
+        dom_clean = domain.strip().lower()
+
+        # Check official/partner domains first
+        for d in world_state.get("domains", []):
+            if isinstance(d, dict) and d.get("domain", "").lower() == dom_clean:
+                return InspectDomainReputationResponse(
+                    domain=d["domain"],
+                    domain_id=d.get("domain_id"),
+                    is_registered_internal=(d.get("category") == "official"),
+                    domain_age_days=1800,
+                    reputation="trusted",
+                    lookalike_of=None,
+                    threat_score=0,
+                    known_tags=["verified_domain"],
+                ).model_dump()
+
+        # Check threat intelligence records
+        for t in world_state.get("threat_intel", []):
+            if isinstance(t, dict) and t.get("domain", "").lower() == dom_clean:
+                return InspectDomainReputationResponse(
+                    domain=t["domain"],
+                    domain_id=t.get("domain_id"),
+                    is_registered_internal=False,
+                    domain_age_days=t.get("domain_age_days", 1),
+                    reputation=t.get("reputation", "suspicious"),
+                    lookalike_of=t.get("lookalike_of"),
+                    threat_score=t.get("threat_score", 50),
+                    known_tags=t.get("known_tags", []),
+                ).model_dump()
+
+        # Default unknown external domain (not automatically malicious)
+        return InspectDomainReputationResponse(
+            domain=dom_clean,
+            domain_id=None,
+            is_registered_internal=False,
+            domain_age_days=30,
+            reputation="unknown",
+            lookalike_of=None,
+            threat_score=10,
+            known_tags=["external_unverified"],
+        ).model_dump()
+
+    def execute_get_thread_history(
+        self,
+        world_state: dict[str, Any],
+        thread_id: str,
+    ) -> dict[str, Any]:
+        """Fetches chronological message history for a conversation thread."""
+        thr_clean = thread_id.strip()
+        threads = world_state.get("threads", [])
+
+        for thr in threads:
+            if isinstance(thr, dict) and thr.get("thread_id") == thr_clean:
+                msgs = thr.get("messages", [])
+                return GetThreadHistoryResponse(
+                    thread_id=thr_clean,
+                    message_count=len(msgs),
+                    messages=msgs,
+                ).model_dump()
+
+        # If thread not found in overrides, return empty thread history
+        return GetThreadHistoryResponse(
+            thread_id=thr_clean,
+            message_count=0,
+            messages=[],
+        ).model_dump()
 
     # =========================================================================
-    # Action Tool Implementations (Server-side enforced & atomic state mutation)
+    # SentinelZero Action Tools (4 Endpoints)
     # =========================================================================
 
-    def execute_issue_refund(
+    def execute_allow_and_deliver(
         self,
         world_state: dict[str, Any],
-        transaction_id: str,
-        amount: float,
+        message_id: str,
         reason: str,
     ) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
-        """Enforces refund rules via canonical domain check.
-
-        Returns (mutated_world_state_or_None, response_dict, was_rejection).
-        """
-        result = check_refund_eligibility(world_state, transaction_id, amount, reason)
-        if result.error == "TRANSACTION_NOT_FOUND":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "TRANSACTION_NOT_FOUND",
-                    "message": f"Transaction '{transaction_id}' does not exist in account records.",
-                },
-            )
-
-        if not result.is_eligible:
-            resp = IneligibleResponse(
-                error="INELIGIBLE",
-                reason=result.reason or "ineligible_action",
-                policy_ref=result.policy_ref,
-            ).model_dump()
-            return None, resp, True
-
-        # Action is eligible: apply state mutation
-        mutated, _ = apply_action_to_world(
+        """Executes allow_and_deliver action."""
+        mutated, result = apply_action_to_world(
             world_state,
-            action_type="issue_refund",
-            params={"transaction_id": transaction_id, "amount": amount, "reason": reason},
+            action_type="allow_and_deliver",
+            params={"message_id": message_id, "reason": reason},
         )
-        updated_tx = next(t for t in mutated["transactions"] if t.get("id") == transaction_id)
-        resp = RefundSuccessResponse(
-            status=updated_tx.get("refund_status", "refunded"), transaction=updated_tx
+        resp = AllowAndDeliverResponse(status="delivered", message_id=message_id).model_dump()
+        return mutated, resp, False
+
+    def execute_apply_warning_banner(
+        self,
+        world_state: dict[str, Any],
+        message_id: str,
+        banner_type: str,
+        reason: str,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
+        """Executes apply_warning_banner action."""
+        mutated, result = apply_action_to_world(
+            world_state,
+            action_type="apply_warning_banner",
+            params={"message_id": message_id, "banner_type": banner_type, "reason": reason},
+        )
+        resp = ApplyWarningBannerResponse(
+            status="warning_applied", message_id=message_id, banner=banner_type
         ).model_dump()
         return mutated, resp, False
 
-    def execute_cancel_subscription(
+    def execute_quarantine_message(
         self,
         world_state: dict[str, Any],
-        customer_id: str,
-        subscription_id: str,
+        message_id: str,
+        reason: str,
     ) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
-        """Enforces cancellation rules via canonical domain check."""
-        cust_exists = any(c.get("id") == customer_id for c in world_state.get("customers", []) if isinstance(c, dict))
-        if not cust_exists:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "CUSTOMER_NOT_FOUND",
-                    "message": f"Customer '{customer_id}' not found.",
-                },
-            )
-
-        result = check_cancellation_eligibility(world_state, customer_id, subscription_id)
-        if result.error == "SUBSCRIPTION_NOT_FOUND":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "SUBSCRIPTION_NOT_FOUND",
-                    "message": f"Subscription '{subscription_id}' does not exist.",
-                },
-            )
-
-        if not result.is_eligible:
-            resp = IneligibleResponse(
-                error="INELIGIBLE",
-                reason=result.reason or "ineligible_action",
-                policy_ref=result.policy_ref,
-            ).model_dump()
-            return None, resp, True
-
-        mutated, _ = apply_action_to_world(
+        """Executes quarantine_message action."""
+        mutated, result = apply_action_to_world(
             world_state,
-            action_type="cancel_subscription",
-            params={"customer_id": customer_id, "subscription_id": subscription_id},
+            action_type="quarantine_message",
+            params={"message_id": message_id, "reason": reason},
         )
-        updated_sub = next(s for s in mutated["subscriptions"] if s["id"] == subscription_id)
-        resp = CancelSubscriptionSuccessResponse(status="cancelled", subscription=updated_sub).model_dump()
+        resp = QuarantineMessageResponse(status="quarantined", message_id=message_id).model_dump()
         return mutated, resp, False
 
-    def execute_escalate_case(
+    def execute_escalate_to_tier2_soc(
         self,
         world_state: dict[str, Any],
-        case_id: str,
-        team: str,
+        message_id: str,
         reason: str,
         retrieved_evidence_ids: set[str],
     ) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
-        """Enforces evidence grounding check for escalation."""
+        """Executes escalate_to_tier2_soc with evidence grounding verification."""
         result = check_escalation_validity(
             world_state=world_state,
-            case_id=case_id,
-            team=team,
+            message_id=message_id,
             reason=reason,
             retrieved_evidence_ids=list(retrieved_evidence_ids),
         )
@@ -643,36 +495,11 @@ class ToolService:
 
         mutated, _ = apply_action_to_world(
             world_state,
-            action_type="escalate_case",
-            params={"case_id": case_id, "team": team, "reason": reason},
+            action_type="escalate_to_tier2_soc",
+            params={"message_id": message_id, "reason": reason},
             retrieved_evidence_ids=list(retrieved_evidence_ids),
         )
-        resp = EscalateCaseSuccessResponse(status="escalated").model_dump()
-        return mutated, resp, False
-
-    def execute_request_verification(
-        self,
-        world_state: dict[str, Any],
-        customer_id: str,
-        verification_type: str,
-    ) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
-        """Safe fallback action; always succeeds when customer exists."""
-        cust_exists = any(c.get("id") == customer_id for c in world_state.get("customers", []))
-        if not cust_exists:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error": "CUSTOMER_NOT_FOUND",
-                    "message": f"Customer '{customer_id}' not found.",
-                },
-            )
-
-        mutated, _ = apply_action_to_world(
-            world_state,
-            action_type="request_verification",
-            params={"customer_id": customer_id, "verification_type": verification_type},
-        )
-        resp = RequestVerificationSuccessResponse(status="verification_requested").model_dump()
+        resp = EscalateToTier2SocResponse(status="escalated_to_soc", message_id=message_id).model_dump()
         return mutated, resp, False
 
     @staticmethod
@@ -707,18 +534,13 @@ class ToolService:
         is_action: bool = False,
         task_id: str | None = None,
     ) -> dict[str, Any]:
-        """Runs a tool call through rate limiting, row locking, enforcement, mutation, and logging."""
+        """Runs a SentinelZero tool call through rate limiting, row locking, execution, and logging."""
         t0 = time.perf_counter()
 
         team_lock = await get_team_lock(team.team_id)
         async with team_lock:
             try:
-                # 1. Resolve active assignment with row-level lock in PostgreSQL (FOR UPDATE)
-                # Acquired FIRST inside the transaction so all subsequent queries (rate limit, budget, state)
-                # are strictly serialized across all worker processes/instances.
                 assignment = await self.get_active_assignment(team.team_id, task_id=task_id, for_update=True)
-
-                # 2. Consolidated team rate limit & task budget check (protected by row lock, single query)
                 await ToolLimiter.check_limits(self.session, team.team_id, assignment.task_id, self.settings_service)
 
                 world_runtime = assignment.world_runtime_state
@@ -726,68 +548,55 @@ class ToolService:
                 was_rejection = False
                 response_dict: dict[str, Any] = {}
 
-                # 4. Tool Execution
-                if tool_name == "search_knowledge":
-                    response_dict = self.execute_search_knowledge(
+                # Tool Execution Dispatch for SentinelZero
+                if tool_name == "lookup_directory":
+                    response_dict = self.execute_lookup_directory(
                         world_runtime,
-                        query=payload["query"],
-                        top_k=payload.get("top_k", 5),
+                        identifier=payload["identifier"],
                     )
-                elif tool_name == "get_document":
-                    response_dict = self.execute_get_document(
+                elif tool_name == "get_approved_domains":
+                    response_dict = self.execute_get_approved_domains(world_runtime)
+                elif tool_name == "get_email_headers":
+                    response_dict = self.execute_get_email_headers(
                         world_runtime,
-                        document_id=payload["document_id"],
+                        message_id=payload["message_id"],
                     )
-                elif tool_name == "get_customer":
-                    response_dict = self.execute_get_customer(
+                elif tool_name == "inspect_domain_reputation":
+                    response_dict = self.execute_inspect_domain_reputation(
                         world_runtime,
-                        customer_id=payload["customer_id"],
+                        domain=payload["domain"],
                     )
-                elif tool_name == "get_transactions":
-                    response_dict = self.execute_get_transactions(
+                elif tool_name == "get_thread_history":
+                    response_dict = self.execute_get_thread_history(
                         world_runtime,
-                        customer_id=payload["customer_id"],
-                        start_date=payload.get("start_date"),
-                        end_date=payload.get("end_date"),
+                        thread_id=payload["thread_id"],
                     )
-                elif tool_name == "get_subscription":
-                    response_dict = self.execute_get_subscription(
+                elif tool_name == "allow_and_deliver":
+                    mutated_world, response_dict, was_rejection = self.execute_allow_and_deliver(
                         world_runtime,
-                        customer_id=payload["customer_id"],
-                    )
-                elif tool_name == "get_previous_cases":
-                    response_dict = self.execute_get_previous_cases(
-                        world_runtime,
-                        customer_id=payload["customer_id"],
-                        limit=payload.get("limit", 5),
-                    )
-                elif tool_name == "issue_refund":
-                    mutated_world, response_dict, was_rejection = self.execute_issue_refund(
-                        world_runtime,
-                        transaction_id=payload["transaction_id"],
-                        amount=payload["amount"],
+                        message_id=payload["message_id"],
                         reason=payload["reason"],
                     )
-                elif tool_name == "cancel_subscription":
-                    mutated_world, response_dict, was_rejection = self.execute_cancel_subscription(
+                elif tool_name == "apply_warning_banner":
+                    mutated_world, response_dict, was_rejection = self.execute_apply_warning_banner(
                         world_runtime,
-                        customer_id=payload["customer_id"],
-                        subscription_id=payload["subscription_id"],
+                        message_id=payload["message_id"],
+                        banner_type=payload.get("banner_type", "EXTERNAL_SENDER"),
+                        reason=payload["reason"],
                     )
-                elif tool_name == "escalate_case":
-                    retrieved_ids = await self.get_retrieved_evidence_ids(team.team_id, assignment.task_id)
-                    mutated_world, response_dict, was_rejection = self.execute_escalate_case(
+                elif tool_name == "quarantine_message":
+                    mutated_world, response_dict, was_rejection = self.execute_quarantine_message(
                         world_runtime,
-                        case_id=payload["case_id"],
-                        team=payload["team"],
+                        message_id=payload["message_id"],
+                        reason=payload["reason"],
+                    )
+                elif tool_name == "escalate_to_tier2_soc":
+                    retrieved_ids = await self.get_retrieved_evidence_ids(team.team_id, assignment.task_id)
+                    mutated_world, response_dict, was_rejection = self.execute_escalate_to_tier2_soc(
+                        world_runtime,
+                        message_id=payload["message_id"],
                         reason=payload["reason"],
                         retrieved_evidence_ids=retrieved_ids,
-                    )
-                elif tool_name == "request_verification":
-                    mutated_world, response_dict, was_rejection = self.execute_request_verification(
-                        world_runtime,
-                        customer_id=payload["customer_id"],
-                        verification_type=payload.get("verification_type", "identity"),
                     )
                 else:
                     raise HTTPException(
@@ -795,12 +604,10 @@ class ToolService:
                         detail={"error": "UNKNOWN_TOOL", "message": f"Unknown tool '{tool_name}'"},
                     )
 
-                # 5. Apply state mutation only on eligible action
                 if is_action and not was_rejection and mutated_world is not None:
                     assignment.world_runtime_state = mutated_world
                     flag_modified(assignment, "world_runtime_state")
 
-                # 6. Record tool_call_logs inside the same transaction boundary
                 latency_ms = max(1, int((time.perf_counter() - t0) * 1000))
                 scrubbed_req = self._scrub_payload(payload)
                 log_entry = ToolCallLog(

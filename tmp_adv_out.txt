@@ -1,0 +1,31 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.8, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\Pallavi\OneDrive\Desktop\agent_arena_
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collected 17 items
+
+tests\test_sentinelzero_adversarial.py ...F...F..F......                 [100%]
+
+================================== FAILURES ===================================
+_____________ test_audit_04_tool_call_logs_scrubbing_and_hygiene ______________
+tests\test_sentinelzero_adversarial.py:185: in test_audit_04_tool_call_logs_scrubbing_and_hygiene
+    assert log is not None
+E   assert None is not None
+____________ test_audit_08_zero_mutation_on_enforcement_rejection _____________
+tests\test_sentinelzero_adversarial.py:294: in test_audit_08_zero_mutation_on_enforcement_rejection
+    assignment = await tool_service.assign_task(team_a.team_id, "TASK-HIDDEN-037")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\agent_arena\services\tool_service.py:221: in assign_task
+    raise ValueError(f"Task '{task_id}' does not exist in tasks table.")
+E   ValueError: Task 'TASK-HIDDEN-037' does not exist in tasks table.
+_______________ test_audit_11_prompt_injection_tasks_evaluation _______________
+tests\test_sentinelzero_adversarial.py:382: in test_audit_11_prompt_injection_tasks_evaluation
+    assert data["aggregate_score"] > 0.50
+E   assert 0.0043 > 0.5
+=========================== short test summary info ===========================
+FAILED tests/test_sentinelzero_adversarial.py::test_audit_04_tool_call_logs_scrubbing_and_hygiene
+FAILED tests/test_sentinelzero_adversarial.py::test_audit_08_zero_mutation_on_enforcement_rejection
+FAILED tests/test_sentinelzero_adversarial.py::test_audit_11_prompt_injection_tasks_evaluation
+======================== 3 failed, 14 passed in 2.72s =========================

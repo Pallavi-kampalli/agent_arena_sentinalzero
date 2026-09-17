@@ -1,0 +1,183 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.8, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\Pallavi\OneDrive\Desktop\agent_arena_
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collected 30 items
+
+tests\test_read_tools.py FFFFFF.F                                        [ 26%]
+tests\test_action_tools.py FFFFFFFF                                      [ 53%]
+tests\test_participant_contract.py ..FFFFFFFFF.FF                        [100%]
+
+================================== FAILURES ===================================
+________________________ test_search_knowledge_success ________________________
+tests\test_read_tools.py:57: in test_search_knowledge_success
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+___________________ test_get_document_success_and_not_found ___________________
+tests\test_read_tools.py:82: in test_get_document_success_and_not_found
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+___________________ test_get_customer_success_and_not_found ___________________
+tests\test_read_tools.py:106: in test_get_customer_success_and_not_found
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+____________________ test_get_transactions_date_filtering _____________________
+tests\test_read_tools.py:126: in test_get_transactions_date_filtering
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+________________________ test_get_subscription_success ________________________
+tests\test_read_tools.py:158: in test_get_subscription_success
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+___________________________ test_get_previous_cases ___________________________
+tests\test_read_tools.py:173: in test_get_previous_cases
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_______________________ test_no_active_task_returns_404 _______________________
+tests\test_read_tools.py:201: in test_no_active_task_returns_404
+    assert resp.json()["detail"]["error"] == "NO_ACTIVE_TASK"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: string indices must be integers, not 'str'
+________________ test_issue_refund_success_and_state_mutation _________________
+tests\test_action_tools.py:162: in test_issue_refund_success_and_state_mutation
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_________________ test_issue_refund_already_refunded_rejected _________________
+tests\test_action_tools.py:196: in test_issue_refund_already_refunded_rejected
+    assert resp1.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_________________ test_issue_refund_chargeback_hold_rejected __________________
+tests\test_action_tools.py:239: in test_issue_refund_chargeback_hold_rejected
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+__________________ test_issue_refund_outside_window_rejected __________________
+tests\test_action_tools.py:264: in test_issue_refund_outside_window_rejected
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+______________ test_issue_refund_unknown_transaction_returns_404 ______________
+tests\test_action_tools.py:281: in test_issue_refund_unknown_transaction_returns_404
+    assert resp.json()["detail"]["error"] == "TRANSACTION_NOT_FOUND"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: string indices must be integers, not 'str'
+___________ test_cancel_subscription_success_and_lock_in_rejection ____________
+tests\test_action_tools.py:303: in test_cancel_subscription_success_and_lock_in_rejection
+    assert resp_eligible.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+__________________ test_escalate_case_grounded_vs_ungrounded __________________
+tests\test_action_tools.py:335: in test_escalate_case_grounded_vs_ungrounded
+    assert resp_ungrounded.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+___________________ test_request_verification_safe_fallback ___________________
+tests\test_action_tools.py:373: in test_request_verification_safe_fallback
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+________________________ test_scenario_01_valid_refund ________________________
+tests\test_participant_contract.py:158: in test_scenario_01_valid_refund
+    assert prod_res.is_eligible is True
+E   AssertionError: assert False is True
+E    +  where False = EligibilityResult(is_eligible=False, status='success', reason='SupportOps actions are disabled', policy_ref=None, error='UNKNOWN_ACTION').is_eligible
+___________________ test_scenario_02_refund_amount_exceeds ____________________
+tests\test_participant_contract.py:174: in test_scenario_02_refund_amount_exceeds
+    assert prod_res.reason == "amount_exceeds_transaction"
+E   AssertionError: assert 'SupportOps a... are disabled' == 'amount_exceeds_transaction'
+E     
+E     - amount_exceeds_transaction
+E     + SupportOps actions are disabled
+______________________ test_scenario_03_already_refunded ______________________
+tests\test_participant_contract.py:187: in test_scenario_03_already_refunded
+    assert prod_res.reason == "already_refunded"
+E   AssertionError: assert 'SupportOps a... are disabled' == 'already_refunded'
+E     
+E     - already_refunded
+E     + SupportOps actions are disabled
+_______________ test_scenario_04_chargeback_investigation_hold ________________
+tests\test_participant_contract.py:197: in test_scenario_04_chargeback_investigation_hold
+    assert prod_res.reason == "chargeback_investigation_active"
+E   AssertionError: assert 'SupportOps a... are disabled' == 'chargeback_i...gation_active'
+E     
+E     - chargeback_investigation_active
+E     + SupportOps actions are disabled
+________________ test_scenario_05_outside_refund_policy_window ________________
+tests\test_participant_contract.py:209: in test_scenario_05_outside_refund_policy_window
+    assert prod_res.reason == "outside_refund_window"
+E   AssertionError: assert 'SupportOps a... are disabled' == 'outside_refund_window'
+E     
+E     - outside_refund_window
+E     + SupportOps actions are disabled
+_____________________ test_scenario_06_valid_cancellation _____________________
+tests\test_participant_contract.py:217: in test_scenario_06_valid_cancellation
+    assert prod_res.is_eligible is True
+E   AssertionError: assert False is True
+E    +  where False = EligibilityResult(is_eligible=False, status='success', reason='SupportOps actions are disabled', policy_ref=None, error='UNKNOWN_ACTION').is_eligible
+_________________ test_scenario_07_contractual_lock_in_active _________________
+tests\test_participant_contract.py:235: in test_scenario_07_contractual_lock_in_active
+    assert prod_res.reason == "lock_in_period_active"
+E   AssertionError: assert 'SupportOps a... are disabled' == 'lock_in_period_active'
+E     
+E     - lock_in_period_active
+E     + SupportOps actions are disabled
+____________ test_scenario_08_cancellation_with_approved_exception ____________
+tests\test_participant_contract.py:243: in test_scenario_08_cancellation_with_approved_exception
+    assert prod_res.is_eligible is True
+E   AssertionError: assert False is True
+E    +  where False = EligibilityResult(is_eligible=False, status='success', reason='SupportOps actions are disabled', policy_ref=None, error='UNKNOWN_ACTION').is_eligible
+_________________ test_scenario_09_unresolved_billing_dispute _________________
+tests\test_participant_contract.py:253: in test_scenario_09_unresolved_billing_dispute
+    assert prod_res.reason == "unresolved_billing_dispute"
+E   AssertionError: assert 'SupportOps a... are disabled' == 'unresolved_billing_dispute'
+E     
+E     - unresolved_billing_dispute
+E     + SupportOps actions are disabled
+_______________ test_scenario_11_invalid_ungrounded_escalation ________________
+tests\test_participant_contract.py:273: in test_scenario_11_invalid_ungrounded_escalation
+    assert prod_res.is_eligible is False
+E   AssertionError: assert True is False
+E    +  where True = EligibilityResult(is_eligible=True, status='escalated_to_soc', reason=None, policy_ref=None, error=None).is_eligible
+_________________ test_scenario_12_verification_safe_fallback _________________
+tests\test_participant_contract.py:287: in test_scenario_12_verification_safe_fallback
+    assert prod_res.is_eligible is True
+E   assert False is True
+E    +  where False = EligibilityResult(is_eligible=False, status='success', reason="Action 'request_verification' is not recognized.", policy_ref=None, error='UNKNOWN_ACTION').is_eligible
+=========================== short test summary info ===========================
+FAILED tests/test_read_tools.py::test_search_knowledge_success - assert 404 =...
+FAILED tests/test_read_tools.py::test_get_document_success_and_not_found - as...
+FAILED tests/test_read_tools.py::test_get_customer_success_and_not_found - as...
+FAILED tests/test_read_tools.py::test_get_transactions_date_filtering - asser...
+FAILED tests/test_read_tools.py::test_get_subscription_success - assert 404 =...
+FAILED tests/test_read_tools.py::test_get_previous_cases - assert 404 == 200
+FAILED tests/test_read_tools.py::test_no_active_task_returns_404 - TypeError:...
+FAILED tests/test_action_tools.py::test_issue_refund_success_and_state_mutation
+FAILED tests/test_action_tools.py::test_issue_refund_already_refunded_rejected
+FAILED tests/test_action_tools.py::test_issue_refund_chargeback_hold_rejected
+FAILED tests/test_action_tools.py::test_issue_refund_outside_window_rejected
+FAILED tests/test_action_tools.py::test_issue_refund_unknown_transaction_returns_404
+FAILED tests/test_action_tools.py::test_cancel_subscription_success_and_lock_in_rejection
+FAILED tests/test_action_tools.py::test_escalate_case_grounded_vs_ungrounded
+FAILED tests/test_action_tools.py::test_request_verification_safe_fallback - ...
+FAILED tests/test_participant_contract.py::test_scenario_01_valid_refund - As...
+FAILED tests/test_participant_contract.py::test_scenario_02_refund_amount_exceeds
+FAILED tests/test_participant_contract.py::test_scenario_03_already_refunded
+FAILED tests/test_participant_contract.py::test_scenario_04_chargeback_investigation_hold
+FAILED tests/test_participant_contract.py::test_scenario_05_outside_refund_policy_window
+FAILED tests/test_participant_contract.py::test_scenario_06_valid_cancellation
+FAILED tests/test_participant_contract.py::test_scenario_07_contractual_lock_in_active
+FAILED tests/test_participant_contract.py::test_scenario_08_cancellation_with_approved_exception
+FAILED tests/test_participant_contract.py::test_scenario_09_unresolved_billing_dispute
+FAILED tests/test_participant_contract.py::test_scenario_11_invalid_ungrounded_escalation
+FAILED tests/test_participant_contract.py::test_scenario_12_verification_safe_fallback
+======================== 26 failed, 4 passed in 3.28s =========================

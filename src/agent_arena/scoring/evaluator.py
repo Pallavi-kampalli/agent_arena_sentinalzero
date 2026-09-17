@@ -1,5 +1,6 @@
 from typing import Any
 
+# Keep legacy imports for backward compatibility with SupportOps tests
 from agent_arena.scoring.engine import (
     count_duplicate_tool_calls,
     extract_observed_evidence_from_logs,
@@ -12,8 +13,18 @@ from agent_arena.scoring.engine import (
     score_task_success,
 )
 from agent_arena.scoring.schemas import DimensionScores, TaskScoreResult
+from agent_arena.scoring.sentinelzero_evaluator import (
+    SENTINELZERO_WEIGHTS,
+    SENTINELZERO_TOOL_BUDGET,
+    SentinelZeroTaskEvaluator,
+)
 
-DEFAULT_WEIGHTS = {
+# SentinelZero competition weights (PRD §5)
+# These are the canonical weights used by the evaluator.
+DEFAULT_WEIGHTS = SENTINELZERO_WEIGHTS
+
+# Legacy SupportOps weights preserved for backward-compatible unit tests
+_LEGACY_SUPPORTOPS_WEIGHTS = {
     "task_success": 0.45,
     "policy": 0.15,
     "robustness": 0.15,
@@ -25,10 +36,45 @@ DEFAULT_WEIGHTS = {
 
 
 class TaskEvaluator:
-    """Orchestrates deterministic evaluation of a single task assignment."""
+    """Orchestrates deterministic evaluation of a single task assignment.
+
+    Routes all evaluation through SentinelZeroTaskEvaluator.
+    The legacy SupportOps scoring path is retained for backward compatibility
+    but is no longer the default.
+    """
 
     @classmethod
     def evaluate_task(
+        cls,
+        task_id: str,
+        world_seed: dict[str, Any],
+        ground_truth: dict[str, Any],
+        runtime_state: dict[str, Any] | None,
+        submission_record: dict[str, Any] | None,
+        tool_logs: list[dict[str, Any]],
+        family: str | None = None,
+        variant: str | None = None,
+        tool_call_budget: int = SENTINELZERO_TOOL_BUDGET,
+        weights: dict[str, float] | None = None,
+        input_payload: dict[str, Any] | None = None,
+    ) -> TaskScoreResult:
+        """Delegates to SentinelZeroTaskEvaluator (canonical SentinelZero scoring)."""
+        return SentinelZeroTaskEvaluator.evaluate_task(
+            task_id=task_id,
+            world_seed=world_seed,
+            ground_truth=ground_truth,
+            runtime_state=runtime_state,
+            submission_record=submission_record,
+            tool_logs=tool_logs,
+            family=family,
+            variant=variant,
+            tool_call_budget=tool_call_budget,
+            weights=weights,
+            input_payload=input_payload,
+        )
+
+    @classmethod
+    def evaluate_task_legacy(
         cls,
         task_id: str,
         world_seed: dict[str, Any],
@@ -42,14 +88,14 @@ class TaskEvaluator:
         weights: dict[str, float] | None = None,
         input_payload: dict[str, Any] | None = None,
     ) -> TaskScoreResult:
-        """Evaluates a task across all 7 dimensions.
+        """Legacy SupportOps evaluation path. Retained for backward-compatibility only.
 
-        Handles:
+        Evaluates a task across all 7 dimensions:
         - Completed task with participant payload
         - Timed out task (sealed 0.0)
         - Unstarted task (sealed 0.0)
         """
-        w = weights or DEFAULT_WEIGHTS
+        w = weights or _LEGACY_SUPPORTOPS_WEIGHTS
 
         # 1. Check if unstarted
         if submission_record is None:

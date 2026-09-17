@@ -1,132 +1,167 @@
-"""Pydantic schemas for the 10 SupportOps tools (6 read tools, 4 action tools)."""
+"""Pydantic schemas for the 9 SentinelZero cybersecurity triage tools (5 read tools, 4 action tools)."""
 
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# --- Read Tools ---
+# =============================================================================
+# Read Tools (5 Endpoints)
+# =============================================================================
 
 
-class SearchKnowledgeRequest(BaseModel):
+class LookupDirectoryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    query: str = Field(..., min_length=1, max_length=500, description="Keyword search query")
-    top_k: int = Field(default=5, ge=1, le=50, description="Max number of documents to return")
 
-
-class SearchKnowledgeResult(BaseModel):
-    id: str
-    title: str
-    snippet: str
-    updated_at: str
-    category: str
-
-
-class SearchKnowledgeResponse(BaseModel):
-    results: list[dict[str, Any]]
-
-
-class GetDocumentRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    document_id: str = Field(
-        ..., min_length=1, max_length=100, description="Policy or document identifier (e.g. DOC-1001)"
+    identifier: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Employee email address or employee ID (e.g. EMP-1001 or alex.smith@sentinel-acme.edu)",
     )
 
 
-class GetDocumentResponse(BaseModel):
-    document: dict[str, Any]
+class LookupDirectoryResponse(BaseModel):
+    found: bool
+    employee: dict[str, Any] | None = None
 
 
-class GetCustomerRequest(BaseModel):
+class GetApprovedDomainsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    customer_id: str = Field(..., min_length=1, max_length=100, description="Customer ID (e.g. CUS-1001)")
 
 
-class GetCustomerResponse(BaseModel):
-    customer: dict[str, Any]
+class GetApprovedDomainsResponse(BaseModel):
+    official_domains: list[str] = Field(default_factory=list)
+    partner_domains: list[str] = Field(default_factory=list)
 
 
-class GetTransactionsRequest(BaseModel):
+class GetEmailHeadersRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    customer_id: str = Field(..., min_length=1, max_length=100, description="Customer ID")
-    start_date: str | None = Field(default=None, max_length=50, description="ISO format start date (inclusive)")
-    end_date: str | None = Field(default=None, max_length=50, description="ISO format end date (inclusive)")
 
-
-class GetTransactionsResponse(BaseModel):
-    transactions: list[dict[str, Any]]
-
-
-class GetSubscriptionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    customer_id: str = Field(..., min_length=1, max_length=100, description="Customer ID")
-
-
-class GetSubscriptionResponse(BaseModel):
-    subscription: dict[str, Any] | None = None
-
-
-class GetPreviousCasesRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    customer_id: str = Field(..., min_length=1, max_length=100, description="Customer ID")
-    limit: int = Field(default=5, ge=1, le=50, description="Max cases to return")
-
-
-class GetPreviousCasesResponse(BaseModel):
-    cases: list[dict[str, Any]]
-
-
-# --- Action Tools ---
-
-
-class IssueRefundRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    transaction_id: str = Field(..., min_length=1, max_length=100, description="Transaction ID to refund")
-    amount: float = Field(..., gt=0, le=1_000_000, allow_inf_nan=False, description="Refund amount (must be positive)")
-    reason: str = Field(..., min_length=1, max_length=2000, description="Agent rationale for refund")
-
-
-class CancelSubscriptionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    customer_id: str = Field(..., min_length=1, max_length=100, description="Customer ID")
-    subscription_id: str = Field(..., min_length=1, max_length=100, description="Subscription ID to cancel")
-
-
-class EscalateCaseRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    case_id: str = Field(..., min_length=1, max_length=100, description="Case or transaction identifier")
-    team: str = Field(
-        ..., min_length=1, max_length=100, description="Target escalation team (e.g. billing_specialists)"
-    )
-    reason: str = Field(..., min_length=1, max_length=2000, description="Evidence-grounded rationale for escalation")
-
-
-class RequestVerificationRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    customer_id: str = Field(..., min_length=1, max_length=100, description="Customer ID to verify")
-    verification_type: str = Field(
-        default="identity", min_length=1, max_length=50, description="Type of verification challenge"
+    message_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Message identifier (e.g. MSG-DEV-001)",
     )
 
 
-# --- Success & Business Rejection Responses ---
+class GetEmailHeadersResponse(BaseModel):
+    message_id: str
+    from_header: str
+    reply_to: str
+    return_path: str
+    originating_ip: str
+    originating_domain: str
+    auth_results: dict[str, str] = Field(default_factory=dict)
 
 
-class RefundSuccessResponse(BaseModel):
-    status: str = "refunded"
-    transaction: dict[str, Any]
+class InspectDomainReputationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    domain: str = Field(
+        ...,
+        min_length=1,
+        max_length=253,
+        description="Domain name or URL host to inspect (e.g. sentinel-acme-support.com)",
+    )
 
 
-class CancelSubscriptionSuccessResponse(BaseModel):
-    status: str = "cancelled"
-    subscription: dict[str, Any]
+class InspectDomainReputationResponse(BaseModel):
+    domain: str
+    domain_id: str | None = None
+    is_registered_internal: bool = False
+    domain_age_days: int = 0
+    reputation: str = "unknown"
+    lookalike_of: str | None = None
+    threat_score: int = Field(default=0, ge=0, le=100)
+    known_tags: list[str] = Field(default_factory=list)
 
 
-class EscalateCaseSuccessResponse(BaseModel):
-    status: str = "escalated"
+class GetThreadHistoryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    thread_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Conversation thread identifier (e.g. THR-DEV-006)",
+    )
 
 
-class RequestVerificationSuccessResponse(BaseModel):
-    status: str = "verification_requested"
+class GetThreadHistoryResponse(BaseModel):
+    thread_id: str
+    message_count: int
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# =============================================================================
+# Action Tools (4 Endpoints, Server-Side Enforced)
+# =============================================================================
+
+
+class AllowAndDeliverRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    message_id: str = Field(..., min_length=1, max_length=100, description="Message ID to deliver")
+    reason: str = Field(..., min_length=1, max_length=2000, description="Security rationale for allowing message")
+
+
+class AllowAndDeliverResponse(BaseModel):
+    status: str = "delivered"
+    message_id: str
+
+
+class ApplyWarningBannerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    message_id: str = Field(..., min_length=1, max_length=100, description="Message ID to flag")
+    banner_type: str = Field(
+        default="EXTERNAL_SENDER",
+        min_length=1,
+        max_length=100,
+        description="Warning banner classification (e.g. EXTERNAL_SENDER, UNVERIFIED_IDENTITY)",
+    )
+    reason: str = Field(..., min_length=1, max_length=2000, description="Rationale for applying warning banner")
+
+
+class ApplyWarningBannerResponse(BaseModel):
+    status: str = "warning_applied"
+    message_id: str
+    banner: str
+
+
+class QuarantineMessageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    message_id: str = Field(..., min_length=1, max_length=100, description="Message ID to quarantine")
+    reason: str = Field(..., min_length=1, max_length=2000, description="Rationale for quarantining message")
+
+
+class QuarantineMessageResponse(BaseModel):
+    status: str = "quarantined"
+    message_id: str
+
+
+class EscalateToTier2SocRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    message_id: str = Field(..., min_length=1, max_length=100, description="Message ID or incident identifier")
+    reason: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Evidence-grounded rationale citing at least one retrieved evidence ID",
+    )
+
+
+class EscalateToTier2SocResponse(BaseModel):
+    status: str = "escalated_to_soc"
+    message_id: str
+
+
+# =============================================================================
+# Success & Business Rejection Responses
+# =============================================================================
 
 
 class IneligibleResponse(BaseModel):

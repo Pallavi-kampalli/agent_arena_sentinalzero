@@ -1,0 +1,28 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.8, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\Pallavi\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Pallavi\OneDrive\Desktop\agent_arena_
+configfile: pyproject.toml
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 17 items
+
+tests/test_sentinelzero_adversarial.py::test_audit_01_submission_start_no_ground_truth_leakage PASSED [  5%]
+tests/test_sentinelzero_adversarial.py::test_audit_02_tools_api_no_ground_truth_leakage PASSED [ 11%]
+tests/test_sentinelzero_adversarial.py::test_audit_03_error_payloads_no_ground_truth_leakage PASSED [ 17%]
+tests/test_sentinelzero_adversarial.py::test_audit_04_tool_call_logs_scrubbing_and_hygiene PASSED [ 23%]
+tests/test_sentinelzero_adversarial.py::test_audit_05_cross_team_task_isolation PASSED [ 29%]
+tests/test_sentinelzero_adversarial.py::test_audit_06_already_submitted_task_tool_call_rejection PASSED [ 35%]
+tests/test_sentinelzero_adversarial.py::test_audit_07_identical_entities_world_state_isolation PASSED [ 41%]
+tests/test_sentinelzero_adversarial.py::test_audit_08_zero_mutation_on_enforcement_rejection PASSED [ 47%]
+tests/test_sentinelzero_adversarial.py::test_audit_09_safety_critical_allow_on_malicious_miss_zero_score PASSED [ 52%]
+tests/test_sentinelzero_adversarial.py::test_audit_10_invalid_decision_string_handling PASSED [ 58%]
+tests/test_sentinelzero_adversarial.py::test_audit_11_prompt_injection_tasks_evaluation PASSED [ 64%]
+tests/test_sentinelzero_adversarial.py::test_audit_12_all_9_tools_execution_reliability PASSED [ 70%]
+tests/test_sentinelzero_adversarial.py::test_audit_13_submission_limit_enforcement PASSED [ 76%]
+tests/test_sentinelzero_adversarial.py::test_audit_14_active_submission_exists_conflict PASSED [ 82%]
+tests/test_sentinelzero_adversarial.py::test_audit_15_scoring_weights_sum_to_100_percent PASSED [ 88%]
+tests/test_sentinelzero_adversarial.py::test_audit_16_evidence_f1_precision_recall_harmonic_mean PASSED [ 94%]
+tests/test_sentinelzero_adversarial.py::test_audit_17_40_hidden_benchmark_tasks_loaded_and_evaluable PASSED [100%]
+
+============================= 17 passed in 2.37s ==============================

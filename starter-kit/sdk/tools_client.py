@@ -1,10 +1,6 @@
-"""Agent Arena SupportOps — Official Python SDK.
+"""SentinelZero — Official Python SDK Tools Client.
 
-Provides two clean client interfaces:
-1. ToolsClient: Participant-facing client passed to agent.solve(task, tools).
-   Contains ONLY the 10 SupportOps read and action tools.
-2. ArenaClient: Orchestration client used by main.py.
-   Handles connection, auth, task retrieval, submission, and lifecycle.
+Provides client interfaces for participant agent execution and orchestration.
 """
 
 import os
@@ -34,8 +30,7 @@ class ApiError(Exception):
 class ToolsClient:
     """Participant-facing tools client passed into agent.solve(task, tools).
 
-    Exposes ONLY the 10 SupportOps read and action tools.
-    The agent does NOT need to manage tasks, polling, or submissions.
+    Exposes the 9 SentinelZero investigation and action tools.
     """
 
     def __init__(
@@ -119,89 +114,82 @@ class ToolsClient:
             raise TransportError(f"Malformed JSON response from {path}: {resp.text}", original_exception=e) from e
 
     # =========================================================================
-    # Read Tools (6 endpoints)
+    # SentinelZero Read Tools (5 Endpoints)
     # =========================================================================
 
+    def lookup_directory(self, identifier: str) -> dict[str, Any]:
+        """Looks up employee identity details in the organization directory."""
+        return self._post("/tools/lookup_directory", {"identifier": identifier})
+
+    def get_approved_domains(self) -> dict[str, Any]:
+        """Retrieves official organization domains and trusted partner domains."""
+        return self._post("/tools/get_approved_domains")
+
+    def get_email_headers(self, message_id: str) -> dict[str, Any]:
+        """Retrieves email authentication and security header information."""
+        return self._post("/tools/get_email_headers", {"message_id": message_id})
+
+    def inspect_domain_reputation(self, domain: str) -> dict[str, Any]:
+        """Inspects threat intelligence and reputation for a domain."""
+        return self._post("/tools/inspect_domain_reputation", {"domain": domain})
+
+    def get_thread_history(self, thread_id: str) -> dict[str, Any]:
+        """Retrieves chronological thread history for multi-turn email conversations."""
+        return self._post("/tools/get_thread_history", {"thread_id": thread_id})
+
+    # =========================================================================
+    # SentinelZero Action Tools (4 Endpoints)
+    # =========================================================================
+
+    def allow_and_deliver(self, message_id: str, reason: str = "") -> dict[str, Any]:
+        """Delivers the message normally (ALLOW decision)."""
+        return self._post("/tools/allow_and_deliver", {"message_id": message_id, "reason": reason})
+
+    def apply_warning_banner(self, message_id: str, banner_type: str = "EXTERNAL_SENDER", reason: str = "") -> dict[str, Any]:
+        """Applies a security warning banner to the message (WARN decision)."""
+        return self._post(
+            "/tools/apply_warning_banner",
+            {"message_id": message_id, "banner_type": banner_type, "reason": reason},
+        )
+
+    def quarantine_message(self, message_id: str, reason: str = "") -> dict[str, Any]:
+        """Quarantines the message (QUARANTINE decision)."""
+        return self._post("/tools/quarantine_message", {"message_id": message_id, "reason": reason})
+
+    def escalate_to_tier2_soc(self, message_id: str, reason: str = "") -> dict[str, Any]:
+        """Escalates the incident to human Tier-2 SOC review (ESCALATE decision)."""
+        return self._post("/tools/escalate_to_tier2_soc", {"message_id": message_id, "reason": reason})
+
+    # Legacy alias methods for backwards compatibility
     def search_knowledge(self, query: str, top_k: int = 5) -> dict[str, Any]:
-        """Searches policies and knowledge base documents for relevant snippets."""
-        return self._post("/tools/search_knowledge", {"query": query, "top_k": top_k})
+        return self.get_approved_domains()
 
     def get_document(self, document_id: str) -> dict[str, Any]:
-        """Retrieves full text and metadata of a specific policy or document."""
-        return self._post("/tools/get_document", {"document_id": document_id})
+        return self.lookup_directory(document_id)
 
     def get_customer(self, customer_id: str) -> dict[str, Any]:
-        """Retrieves customer profile and account status."""
-        return self._post("/tools/get_customer", {"customer_id": customer_id})
+        return self.lookup_directory(customer_id)
 
-    def get_transactions(
-        self,
-        customer_id: str,
-        start_date: str | None = None,
-        end_date: str | None = None,
-    ) -> dict[str, Any]:
-        """Retrieves customer transaction history with optional ISO date range filters."""
-        payload: dict[str, Any] = {"customer_id": customer_id}
-        if start_date:
-            payload["start_date"] = start_date
-        if end_date:
-            payload["end_date"] = end_date
-        return self._post("/tools/get_transactions", payload)
+    def get_transactions(self, customer_id: str, **kwargs: Any) -> dict[str, Any]:
+        return {"transactions": []}
 
     def get_subscription(self, customer_id: str) -> dict[str, Any]:
-        """Retrieves customer active subscription details if any."""
-        return self._post("/tools/get_subscription", {"customer_id": customer_id})
+        return {"subscription": None}
 
-    def get_previous_cases(self, customer_id: str, limit: int = 5) -> dict[str, Any]:
-        """Retrieves historical support tickets and previous resolutions for the customer."""
-        return self._post("/tools/get_previous_cases", {"customer_id": customer_id, "limit": limit})
+    def get_previous_cases(self, customer_id: str, **kwargs: Any) -> dict[str, Any]:
+        return {"cases": []}
 
-    # =========================================================================
-    # Action Tools (4 endpoints, server-side enforced)
-    # =========================================================================
+    def issue_refund(self, **kwargs: Any) -> dict[str, Any]:
+        return {"status": "ineligible"}
 
-    def issue_refund(self, transaction_id: str, amount: float, reason: str) -> dict[str, Any]:
-        """Attempts to refund a transaction. Server-side policy enforcement applies."""
-        return self._post(
-            "/tools/issue_refund",
-            {
-                "transaction_id": transaction_id,
-                "amount": amount,
-                "reason": reason,
-            },
-        )
-
-    def cancel_subscription(self, customer_id: str, subscription_id: str) -> dict[str, Any]:
-        """Attempts to cancel a customer subscription. Lock-in and dispute checks apply."""
-        return self._post(
-            "/tools/cancel_subscription",
-            {
-                "customer_id": customer_id,
-                "subscription_id": subscription_id,
-            },
-        )
+    def cancel_subscription(self, **kwargs: Any) -> dict[str, Any]:
+        return {"status": "ineligible"}
 
     def escalate_case(self, case_id: str, team: str, reason: str) -> dict[str, Any]:
-        """Escalates case to a specialized team. Reason must cite retrievable evidence."""
-        return self._post(
-            "/tools/escalate_case",
-            {
-                "case_id": case_id,
-                "team": team,
-                "reason": reason,
-            },
-        )
+        return self.escalate_to_tier2_soc(case_id, reason)
 
-    def request_verification(self, customer_id: str, verification_type: str = "identity") -> dict[str, Any]:
-        """Requests secondary identity or billing verification from the customer (safe fallback)."""
-        return self._post(
-            "/tools/request_verification",
-            {
-                "customer_id": customer_id,
-                "verification_type": verification_type,
-            },
-        )
-
+    def request_verification(self, customer_id: str, **kwargs: Any) -> dict[str, Any]:
+        return {"status": "requested"}
 
     def _get(self, path: str) -> dict[str, Any]:
         try:
@@ -221,13 +209,12 @@ class ToolsClient:
         except Exception as e:
             raise TransportError(f"Malformed JSON response from {path}: {resp.text}", original_exception=e) from e
 
-    # --- Task and Submission Flow (orchestration / compatibility methods) ---
+    # --- Task and Submission Flow ---
 
     def get_task(self) -> dict[str, Any]:
         """Requests assignment of the next task in the active submission or practice pool."""
         return self._post("/task/start")
 
-    # Backwards compatibility alias
     start_task = get_task
 
     def submit_task(
@@ -238,7 +225,9 @@ class ToolsClient:
         evidence: list[str] | None = None,
         uncertainties: list[str] | None = None,
         customer_response: str | None = None,
+        summary: str | None = None,
         confidence: float | None = None,
+        prompt_injection_detected: bool = False,
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Submits structured decision, evidence citations, and response for grading."""
@@ -248,10 +237,12 @@ class ToolsClient:
             body = {
                 "case_classification": case_classification,
                 "decision": decision,
-                "evidence": evidence,
-                "uncertainties": uncertainties,
-                "customer_response": customer_response,
-                "confidence": confidence,
+                "evidence": evidence or [],
+                "uncertainties": uncertainties or [],
+                "customer_response": customer_response or summary or "",
+                "summary": summary,
+                "confidence": confidence if confidence is not None else 1.0,
+                "prompt_injection_detected": prompt_injection_detected,
             }
         body["task_id"] = task_id
         return self._post("/task/submit", body)
@@ -280,15 +271,7 @@ class ToolsClient:
 
 
 class ArenaClient(ToolsClient):
-    """Orchestration client for the Agent Arena API.
-
-    Used by main.py to handle:
-    - Connection & authentication
-    - Task retrieval (get_task)
-    - Task submission (submit_task)
-    - Submission lifecycle (start_submission, get_submission_status, finalize_submission)
-    - Provides scoped ToolsClient for the agent via self.tools.
-    """
+    """Orchestration client for the Agent Arena API."""
 
     def __init__(
         self,
@@ -301,8 +284,6 @@ class ArenaClient(ToolsClient):
         self.tools = ToolsClient(client=self._client, on_tool_call=self._on_tool_call)
 
     def set_active_task(self, task_id: str) -> None:
-        """Sets the active task ID for both the orchestrator and the nested tools client."""
+        """Sets the active task ID for both the orchestrator and nested tools client."""
         super().set_active_task(task_id)
         self.tools.set_active_task(task_id)
-
-

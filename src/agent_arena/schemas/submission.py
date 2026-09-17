@@ -6,28 +6,42 @@ from pydantic import BaseModel, ConfigDict, Field
 class CaseClassification(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    category: str = Field(..., min_length=1, max_length=100)
-    issue: str = Field(..., min_length=1, max_length=100)
-    severity: Literal["low", "medium", "high", "critical"]
+    category: str = Field(default="cybersecurity_triage", min_length=1, max_length=100)
+    issue: str = Field(default="triage", min_length=1, max_length=100)
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
 
 
 class Decision(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    resolution: Literal["refund", "deny", "escalate", "request_info"]
-    escalation_required: bool
+    resolution: Literal[
+        "allow",
+        "warn",
+        "quarantine",
+        "escalate",
+        "ALLOW",
+        "WARN",
+        "QUARANTINE",
+        "ESCALATE",
+        "refund",
+        "deny",
+        "request_info",
+    ]
+    escalation_required: bool = False
 
 
 class TaskSubmitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     task_id: str = Field(..., min_length=1, max_length=100)
-    case_classification: CaseClassification
+    case_classification: CaseClassification | dict[str, Any] | None = None
     decision: Decision
     evidence: list[str] = Field(default_factory=list, max_length=100)
     uncertainties: list[str] = Field(default_factory=list, max_length=100)
-    customer_response: str = Field(..., min_length=1, max_length=10000)
-    confidence: float = Field(..., ge=0.0, le=1.0, allow_inf_nan=False)
+    customer_response: str = Field(default="", max_length=10000)
+    summary: str | None = Field(default=None, max_length=10000)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, allow_inf_nan=False)
+    prompt_injection_detected: bool = Field(default=False)
 
 
 class TaskSubmitResponse(BaseModel):
@@ -74,12 +88,14 @@ class BatchTaskSubmitItem(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     task_id: str = Field(..., min_length=1, max_length=100)
-    case_classification: CaseClassification
+    case_classification: CaseClassification | dict[str, Any] | None = None
     decision: Decision
     evidence: list[str] = Field(default_factory=list, max_length=100)
     uncertainties: list[str] = Field(default_factory=list, max_length=100)
-    customer_response: str = Field(..., min_length=1, max_length=10000)
-    confidence: float = Field(..., ge=0.0, le=1.0, allow_inf_nan=False)
+    customer_response: str = Field(default="", max_length=10000)
+    summary: str | None = Field(default=None, max_length=10000)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, allow_inf_nan=False)
+    prompt_injection_detected: bool = Field(default=False)
     started_at: str | None = None
     completed_at: str | None = None
     task_started_at: str | None = None

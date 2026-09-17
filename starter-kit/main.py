@@ -52,8 +52,8 @@ def validate_output_contract(output: Any) -> list[str]:
     if not isinstance(dec, dict):
         errors.append("Missing or invalid 'decision' (must be dict).")
     else:
-        if dec.get("resolution") not in ("refund", "deny", "escalate", "request_info"):
-            errors.append("decision.resolution must be one of: 'refund', 'deny', 'escalate', 'request_info'.")
+        if dec.get("resolution") not in ("allow", "warn", "quarantine", "escalate", "ALLOW", "WARN", "QUARANTINE", "ESCALATE", "refund", "deny", "request_info"):
+            errors.append("decision.resolution must be one of: 'allow', 'warn', 'quarantine', 'escalate'.")
         if not isinstance(dec.get("escalation_required"), bool):
             errors.append("decision.escalation_required must be a boolean.")
 
