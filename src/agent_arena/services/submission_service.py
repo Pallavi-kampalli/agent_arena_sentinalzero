@@ -184,10 +184,41 @@ class SubmissionService:
                     "order": idx,
                 })
 
+                inp = task_def.input_payload or {}
+                cid = (
+                    inp.get("customer_id")
+                    or inp.get("recipient")
+                    or inp.get("recipient_email")
+                    or inp.get("sender")
+                    or inp.get("sender_email")
+                    or ""
+                )
+                parts = []
+                msg_id = inp.get("message_id")
+                thr_id = inp.get("thread_id")
+                sender = inp.get("sender") or inp.get("sender_email")
+                recipient = inp.get("recipient") or inp.get("recipient_email")
+                subject = inp.get("subject")
+                body = inp.get("message_body") or inp.get("body") or ""
+                if msg_id:
+                    parts.append(f"Message-ID: {msg_id}")
+                if thr_id:
+                    parts.append(f"Thread-ID: {thr_id}")
+                if sender:
+                    parts.append(f"From: {sender}")
+                if recipient:
+                    parts.append(f"To: {recipient}")
+                if subject:
+                    parts.append(f"Subject: {subject}")
+                if parts:
+                    parts.append("")
+                parts.append(body)
+                cmsg = "\n".join(parts).strip()
+
                 tasks_for_response.append({
                     "task_id": assigned_task_id,
-                    "customer_id": task_def.input_payload.get("customer_id", ""),
-                    "customer_message": task_def.input_payload.get("customer_message", ""),
+                    "customer_id": cid,
+                    "customer_message": cmsg,
                 })
 
             submission = Submission(
@@ -350,10 +381,43 @@ class SubmissionService:
             self.session.add(new_assignment)
             await self.session.commit()
 
+            inp = next_task.input_payload or {}
+            cid = (
+                inp.get("customer_id")
+                or inp.get("recipient")
+                or inp.get("recipient_email")
+                or inp.get("sender")
+                or inp.get("sender_email")
+                or ""
+            )
+            cmsg = inp.get("customer_message")
+            if not cmsg:
+                parts = []
+                msg_id = inp.get("message_id")
+                thr_id = inp.get("thread_id")
+                sender = inp.get("sender") or inp.get("sender_email")
+                recipient = inp.get("recipient") or inp.get("recipient_email")
+                subject = inp.get("subject")
+                body = inp.get("message_body") or inp.get("body") or ""
+                if msg_id:
+                    parts.append(f"Message-ID: {msg_id}")
+                if thr_id:
+                    parts.append(f"Thread-ID: {thr_id}")
+                if sender:
+                    parts.append(f"From: {sender}")
+                if recipient:
+                    parts.append(f"To: {recipient}")
+                if subject:
+                    parts.append(f"Subject: {subject}")
+                if parts:
+                    parts.append("")
+                parts.append(body)
+                cmsg = "\n".join(parts).strip()
+
             return {
                 "task_id": next_task.task_id,
-                "customer_message": next_task.input_payload.get("customer_message", ""),
-                "customer_id": next_task.input_payload.get("customer_id", ""),
+                "customer_message": cmsg,
+                "customer_id": cid,
             }
 
     async def submit_task(self, team_id: uuid.UUID, payload: TaskSubmitRequest) -> dict[str, Any]:

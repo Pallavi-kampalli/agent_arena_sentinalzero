@@ -28,7 +28,11 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/agent_arena
-      ENVIRONMENT: ${ENVIRONMENT:-staging}
+      ADMIN_PANEL_SECRET: ${ADMIN_PANEL_SECRET}
+      JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://plentiful-approve-prompter.ngrok-free.dev}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-plentiful-approve-prompter.ngrok-free.dev,*.ngrok-free.dev,localhost,127.0.0.1,api}
     command: ["alembic", "upgrade", "head"]
     networks:
       - agent_arena_net
@@ -48,11 +52,13 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/agent_arena
       ADMIN_PANEL_SECRET: ${ADMIN_PANEL_SECRET}
       JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET}
-      ENVIRONMENT: ${ENVIRONMENT:-staging}
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://plentiful-approve-prompter.ngrok-free.dev}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-plentiful-approve-prompter.ngrok-free.dev,*.ngrok-free.dev,localhost,127.0.0.1,api}
       PORT: 8000
       REVEAL_GROUND_TRUTH: "false"
+      PUBLIC_ARENA_URL: ${PUBLIC_ARENA_URL:-}
+      NGROK_URL: ${NGROK_URL:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health/ready"]
       interval: 5s
@@ -73,10 +79,41 @@ services:
     networks:
       - agent_arena_net
 
+  ngrok:
+    image: ngrok/ngrok:3.38.0-alpine-amd64
+    container_name: agent_arena_ngrok
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+      NGROK_URL: ${NGROK_URL:-}
+    entrypoint:
+      - "/bin/sh"
+      - "-c"
+      - |
+        if [ -z "$$NGROK_AUTHTOKEN" ] || [ "$$NGROK_AUTHTOKEN" = "your-ngrok-authtoken" ]; then
+          echo "[*] NGROK_AUTHTOKEN is not configured in .env."
+          echo "    To activate public ingress, add your NGROK_AUTHTOKEN and NGROK_URL to .env and run:"
+          echo "    docker compose restart ngrok"
+          sleep infinity
+        fi
+        if [ -n "$$NGROK_URL" ] && [ "$$NGROK_URL" != "your-ngrok-url" ]; then
+          echo "[+] Starting ngrok HTTP tunnel to api:8000 on URL: $$NGROK_URL"
+          exec ngrok http api:8000 --url="$$NGROK_URL"
+        else
+          echo "[+] Starting ngrok HTTP tunnel to api:8000 (dynamic endpoint)"
+          exec ngrok http api:8000
+        fi
+    ports:
+      - "${NGROK_PORT:-4040}:4040"
+    networks:
+      - agent_arena_net
+
 networks:
   agent_arena_net:
     driver: bridge
 
 volumes:
   postgres_data:
-
