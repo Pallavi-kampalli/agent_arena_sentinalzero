@@ -17,6 +17,6 @@
   "competition_start_at": null,
   "competition_end_at": null,
   "allowed_llm_models": "*",
-  "rate_limit_tool_calls_per_min": 60,
+  "rate_limit_tool_calls_per_min": 1200,
   "bearer_token_expiry_hours": null
 }

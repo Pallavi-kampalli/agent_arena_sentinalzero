@@ -273,8 +273,8 @@ def test_e2e_starter_kit_agent_against_mock(mock_server):
     tools._post("/dev/reset")
 
     task = tools.start_task()
-    ans = starter_kit_solve(task, tools)
-    assert "decision" in ans
+    with pytest.raises(NotImplementedError):
+        starter_kit_solve(task, tools)
     tools.close()
 
 

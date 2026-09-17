@@ -64,9 +64,9 @@ def test_starter_agent_end_to_end_against_mock(mock_server):
     assert "task_id" in task
     task_id = task["task_id"]
 
-    # 2. Run agent - verifies solve executes and returns triage decision
-    ans = solve(task, tools)
-    assert "decision" in ans
+    # 2. Run agent - verifies zero solution logic template invariant
+    with pytest.raises(NotImplementedError):
+        solve(task, tools)
 
     # 3. Verify Section 7 contract adherence with valid submission payload
     valid_payload = {

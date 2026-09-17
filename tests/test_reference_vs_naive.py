@@ -11,7 +11,7 @@ if str(ROOT_DIR / "src") not in sys.path:
 if str(ROOT_DIR / "starter-kit") not in sys.path:
     sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
 
-import agent  # noqa: E402
+from agent_arena.agent import sentinelzero_agent as agent  # noqa: E402
 from sdk.tools_client import ToolsClient  # noqa: E402
 from agent_arena.scoring.sentinelzero_evaluator import SentinelZeroTaskEvaluator  # noqa: E402
 
