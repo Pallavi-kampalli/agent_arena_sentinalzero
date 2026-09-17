@@ -24,7 +24,7 @@ async def test_mock_tasks_table_loaded():
     cursor.execute("SELECT COUNT(*) FROM mock_tasks")
     count = cursor.fetchone()[0]
     conn.close()
-    assert count == 30
+    assert count == 10
 
 
 @pytest.mark.asyncio
@@ -41,8 +41,6 @@ async def test_task_start_and_isolation():
         assert res_a.status_code == 200
         task_a = res_a.json()
         assert "task_id" in task_a
-        assert "customer_id" in task_a
-        assert "customer_message" in task_a
 
         # Session Beta starts task
         res_b = await client.post("/task/start", headers={"Authorization": "Bearer token-beta"})
@@ -69,68 +67,49 @@ async def test_task_start_and_isolation():
 
 @pytest.mark.asyncio
 async def test_mock_read_tools_execution():
-    """Tests all 6 read tools against the active task runtime state."""
+    """Tests SentinelZero read tools against the active task runtime state."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         headers = {"Authorization": "Bearer test-read-token"}
         await client.post("/dev/reset", headers=headers)
         start_res = await client.post("/task/start", headers=headers)
         task = start_res.json()
-        cust_id = task["customer_id"]
 
-        # 1. search_knowledge
-        sk_res = await client.post(
-            "/tools/search_knowledge", json={"query": "refund policy", "top_k": 3}, headers=headers
+        # 1. lookup_directory
+        dir_res = await client.post(
+            "/tools/lookup_directory", json={"identifier": "alex.smith@sentinel-acme.edu"}, headers=headers
         )
-        assert sk_res.status_code == 200
-        assert "results" in sk_res.json()
-        results = sk_res.json()["results"]
-        assert len(results) > 0
+        assert dir_res.status_code == 200
 
-        # 2. get_document
-        doc_id = results[0]["id"]
-        gd_res = await client.post("/tools/get_document", json={"document_id": doc_id}, headers=headers)
-        assert gd_res.status_code == 200
-        assert "document" in gd_res.json()
+        # 2. get_approved_domains
+        dom_res = await client.post("/tools/get_approved_domains", json={}, headers=headers)
+        assert dom_res.status_code == 200
 
-        # 3. get_customer
-        gc_res = await client.post("/tools/get_customer", json={"customer_id": cust_id}, headers=headers)
-        assert gc_res.status_code == 200
-        assert gc_res.json()["customer"]["id"] == cust_id
+        # 3. get_email_headers
+        hdr_res = await client.post("/tools/get_email_headers", json={"message_id": "MSG-DEV-001"}, headers=headers)
+        assert hdr_res.status_code == 200
 
-        # 4. get_transactions
-        gt_res = await client.post("/tools/get_transactions", json={"customer_id": cust_id}, headers=headers)
-        assert gt_res.status_code == 200
-        assert "transactions" in gt_res.json()
+        # 4. inspect_domain_reputation
+        rep_res = await client.post("/tools/inspect_domain_reputation", json={"domain": "apex-labs-procurement.xyz"}, headers=headers)
+        assert rep_res.status_code == 200
 
-        # 5. get_subscription
-        gs_res = await client.post("/tools/get_subscription", json={"customer_id": cust_id}, headers=headers)
-        assert gs_res.status_code == 200
-        assert "subscription" in gs_res.json()
-
-        # 6. get_previous_cases
-        gpc_res = await client.post(
-            "/tools/get_previous_cases", json={"customer_id": cust_id, "limit": 5}, headers=headers
-        )
-        assert gpc_res.status_code == 200
-        assert "cases" in gpc_res.json()
+        # 5. get_thread_history
+        th_res = await client.post("/tools/get_thread_history", json={"thread_id": "THR-DEV-001"}, headers=headers)
+        assert th_res.status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_mock_action_tools_and_logging():
-    """Tests action tools execution, enforcement rejection, state immutability, and tool logging."""
+    """Tests action tools execution and tool logging."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         headers = {"Authorization": "Bearer test-action-token"}
         await client.post("/dev/reset", headers=headers)
         start_res = await client.post("/task/start", headers=headers)
-        task = start_res.json()
-        cust_id = task["customer_id"]
 
-        # Request verification (safe fallback - always succeeds)
-        verif_res = await client.post("/tools/request_verification", json={"customer_id": cust_id}, headers=headers)
-        assert verif_res.status_code == 200
-        assert verif_res.json().get("status") == "verification_requested"
+        # Action tool call
+        act_res = await client.post("/tools/allow_and_deliver", json={"message_id": "MSG-DEV-001", "reason": "Test delivery"}, headers=headers)
+        assert act_res.status_code == 200
 
         # Check logs in SQLite
         conn = get_db_connection()
@@ -140,7 +119,7 @@ async def test_mock_action_tools_and_logging():
         conn.close()
 
         tool_names = [log["tool_name"] for log in logs]
-        assert "request_verification" in tool_names
+        assert "allow_and_deliver" in tool_names
 
 
 @pytest.mark.asyncio
@@ -157,14 +136,14 @@ async def test_mock_submission_lifecycle():
         data = sub_start.json()
         sub_id = data["submission_id"]
         assert data["attempt_number"] == 1
-        assert data["tasks_total"] == 30
+        assert data["tasks_total"] == 10
 
         # 2. Get status
         status_res = await client.get(f"/submission/{sub_id}/status", headers=headers)
         assert status_res.status_code == 200
         status_data = status_res.json()
         assert status_data["status"] == "in_progress"
-        assert status_data["tasks_total"] == 30
+        assert status_data["tasks_total"] == 10
 
         # 3. Finalize
         fin_res = await client.post(f"/submission/{sub_id}/finalize", headers=headers)

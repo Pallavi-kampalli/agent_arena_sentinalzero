@@ -1,13 +1,13 @@
-"""Agent Arena SupportOps — Main Participant Runtime.
+"""SentinelZero — AI Cyber Detective Participant Runtime.
 
 Orchestrates the lifecycle around the participant's agent:
 1. Loads .env configuration (BASE_URL, BEARER_TOKEN, MODE).
-2. Connects to the Arena API (Mock Simulator or Live Platform).
+2. Connects to the SentinelZero API (Mock Simulator or Live Platform).
 3. Executes in either:
    - Practice Mode: ad-hoc testing with --once or --max-tasks, detailed practice feedback, and poll intervals.
    - Submission Mode: full competition epoch running all tasks sequentially without artificial gaps, collecting answers in memory, submitting each task to satisfy the assignment lock, and finalizing the submission.
 4. Invokes agent.solve(task, tools) strictly sequentially to prevent rate limit bottlenecks.
-5. In Mock Simulator, tracks and displays accuracy (e.g. 25/30 tasks correct) and links to the visual debugger at /dashboard.
+5. In Mock Simulator, tracks and displays accuracy (e.g. 10/10 tasks correct) and links to the visual debugger at /dashboard.
 """
 
 import argparse
@@ -52,7 +52,7 @@ def validate_output_contract(output: Any) -> list[str]:
     if not isinstance(dec, dict):
         errors.append("Missing or invalid 'decision' (must be dict).")
     else:
-        if dec.get("resolution") not in ("allow", "warn", "quarantine", "escalate", "ALLOW", "WARN", "QUARANTINE", "ESCALATE", "refund", "deny", "request_info"):
+        if dec.get("resolution") not in ("allow", "warn", "quarantine", "escalate", "ALLOW", "WARN", "QUARANTINE", "ESCALATE"):
             errors.append("decision.resolution must be one of: 'allow', 'warn', 'quarantine', 'escalate'.")
         if not isinstance(dec.get("escalation_required"), bool):
             errors.append("decision.escalation_required must be a boolean.")
@@ -99,7 +99,7 @@ def main(
         poll_interval = 0.0 if mode == "submission" else 1.0
 
     print("=" * 65)
-    print("  Agent Arena SupportOps — Participant Runtime (main.py)")
+    print("  SentinelZero — AI Cyber Detective Participant Runtime (main.py)")
     print("=" * 65)
     print(f"Target Arena : {base_url}")
     print(f"Auth Token   : {token[:6]}***")
@@ -122,9 +122,19 @@ def main(
                 print(f"[+] Started new submission: {sub_id} (Expected tasks: {total_expected or 'N/A'})")
             except ApiError as e:
                 if "ACTIVE_SUBMISSION_EXISTS" in str(e):
-                    if isinstance(e.detail, dict) and "submission_id" in e.detail:
-                        sub_id = e.detail["submission_id"]
-                    print(f"[*] Resumed existing active submission: {sub_id}")
+                    detail_obj = e.detail.get("detail", e.detail) if isinstance(e.detail, dict) else {}
+                    if isinstance(detail_obj, dict) and "submission_id" in detail_obj:
+                        sub_id = detail_obj["submission_id"]
+                    print(f"[*] Found active submission: {sub_id}. Resetting...")
+                    if sub_id:
+                        try:
+                            client.abort_submission(sub_id)
+                            sub = client.start_submission()
+                            sub_id = sub.get("submission_id")
+                            tasks_list = sub.get("tasks") or []
+                            print(f"[+] Started fresh submission: {sub_id} (Expected tasks: {len(tasks_list)})")
+                        except Exception as reset_err:
+                            print(f"[*] Notice during submission reset: {reset_err}")
                 else:
                     print(f"[*] Submission notice: {e.detail}")
 

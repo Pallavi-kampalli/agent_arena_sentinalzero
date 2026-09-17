@@ -18,7 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # Database and configuration
 MOCK_DIR = Path(__file__).resolve().parent
-DATA_DIR = MOCK_DIR / "data"
+CANONICAL_DATA_DIR = MOCK_DIR.parent.parent / "src" / "agent_arena" / "data"
+DATA_DIR = CANONICAL_DATA_DIR if (CANONICAL_DATA_DIR.exists() and (CANONICAL_DATA_DIR / "tasks.json").exists()) else (MOCK_DIR / "data")
 DB_PATH = os.getenv("MOCK_DATABASE_PATH", str(MOCK_DIR / "mock_arena.db"))
 REVEAL_GROUND_TRUTH = os.getenv("REVEAL_GROUND_TRUTH", "true").lower() in ("1", "true", "yes")
 
@@ -150,23 +151,15 @@ def check_escalation_validity(
     )
 
 
-def check_refund_eligibility(
-    world_state: dict[str, Any],
-    transaction_id: str,
-    amount: float,
-    reason: str,
-) -> EligibilityResult:
-    """Legacy compatibility helper."""
+def check_refund_eligibility(*args: Any, **kwargs: Any) -> EligibilityResult:
+    """Legacy stub."""
     return EligibilityResult(is_eligible=False, error="UNKNOWN_ACTION", reason="SupportOps actions are disabled")
 
 
-def check_cancellation_eligibility(
-    world_state: dict[str, Any],
-    customer_id: str,
-    subscription_id: str,
-) -> EligibilityResult:
-    """Legacy compatibility helper."""
+def check_cancellation_eligibility(*args: Any, **kwargs: Any) -> EligibilityResult:
+    """Legacy stub."""
     return EligibilityResult(is_eligible=False, error="UNKNOWN_ACTION", reason="SupportOps actions are disabled")
+
 
 
 def detect_prompt_injection(message_body: str) -> bool:
@@ -429,10 +422,11 @@ class TaskSubmitRequest(BaseModel):
 
 # Response Schemas
 class TaskStartResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
     task_id: str
-    customer_message: str
-    customer_id: str
+    customer_message: str = ""
+    customer_id: str = ""
+    input_payload: dict[str, Any] | None = None
 
 
 class TaskSubmitResponse(BaseModel):
@@ -553,11 +547,11 @@ def load_tasks_from_data_dir(data_dir: Path) -> list[dict]:
         security_policies = _read_json("policies.json")
     historical_threats = _read_json("historical_threats.json")
 
-    customers = _read_json("customers.json")
-    transactions = _read_json("transactions.json")
-    subscriptions = _read_json("subscriptions.json")
-    policies = _read_json("policies.json")
-    previous_cases = _read_json("previous_cases.json")
+    customers = []
+    transactions = []
+    subscriptions = []
+    policies = copy.deepcopy(security_policies)
+    previous_cases = []
 
     compiled_tasks = []
     for t in tasks:
@@ -579,6 +573,10 @@ def load_tasks_from_data_dir(data_dir: Path) -> list[dict]:
             "actions_taken": [],
             "target_message_id": inp.get("message_id", ""),
             "target_thread_id": inp.get("thread_id", ""),
+            "sender_email": inp.get("sender_email", ""),
+            "recipient_email": inp.get("recipient_email", ""),
+            "subject": inp.get("subject", ""),
+            "message_body": inp.get("message_body", ""),
 
             "customers": copy.deepcopy(customers),
             "transactions": copy.deepcopy(transactions),
@@ -701,27 +699,24 @@ def init_db(conn: sqlite3.Connection | None = None) -> None:
             """)
 
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM mock_tasks")
-            count = cursor.fetchone()[0]
-            if count == 0:
-                tasks = []
-                if DATA_DIR.exists():
-                    tasks = load_tasks_from_data_dir(DATA_DIR)
+            tasks = []
+            if DATA_DIR.exists():
+                tasks = load_tasks_from_data_dir(DATA_DIR)
 
-                for t in tasks:
-                    conn.execute(
-                        """
-                        INSERT OR REPLACE INTO mock_tasks (task_id, dataset, input_payload, world_state_seed, ground_truth_privileged)
-                        VALUES (?, ?, ?, ?, ?)
-                        """,
-                        (
-                            t["task_id"],
-                            t.get("dataset", "dev"),
-                            json.dumps(t["input_payload"]),
-                            json.dumps(t["world_state_seed"]),
-                            json.dumps(t["ground_truth"]),
-                        ),
-                    )
+            for t in tasks:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO mock_tasks (task_id, dataset, input_payload, world_state_seed, ground_truth_privileged)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        t["task_id"],
+                        t.get("dataset", "dev"),
+                        json.dumps(t["input_payload"]),
+                        json.dumps(t["world_state_seed"]),
+                        json.dumps(t["ground_truth"]),
+                    ),
+                )
     finally:
         if close_when_done:
             conn.close()
@@ -884,10 +879,19 @@ def run_read_tool(tool_name: str, world_state: dict[str, Any], payload: dict[str
         for emp in directory:
             if not isinstance(emp, dict):
                 continue
+            emp_email = emp.get("official_email", "").strip().lower()
+            emp_id = emp.get("id", "").strip().lower()
+            emp_name = emp.get("name", "").strip().lower()
+            emp_user = emp_email.split("@")[0] if "@" in emp_email else ""
+
             if (
-                emp.get("official_email", "").strip().lower() == ident_clean
-                or emp.get("id", "").strip().lower() == ident_clean
-                or emp.get("name", "").strip().lower() == ident_clean
+                emp_email == ident_clean
+                or emp_id == ident_clean
+                or emp_name == ident_clean
+                or (ident_clean and ident_clean in emp_email)
+                or (ident_clean and ident_clean in emp_name)
+                or (emp_user and ident_clean.startswith(emp_user))
+                or (emp_user and emp_user in ident_clean)
             ):
                 return {"found": True, "employee": emp}
         return {"found": False, "employee": None}
@@ -907,7 +911,8 @@ def run_read_tool(tool_name: str, world_state: dict[str, Any], payload: dict[str
                     if isinstance(m, dict) and m.get("message_id") == msg_id_clean:
                         matching_msg = m
                         break
-        sender = matching_msg.get("sender") if matching_msg else None
+        sender = matching_msg.get("sender") if matching_msg else (world_state.get("sender_email") or world_state.get("sender") or "")
+        recipient = (matching_msg.get("recipient") if matching_msg else None) or world_state.get("recipient_email") or world_state.get("recipient") or ""
         from_domain = sender.split("@")[-1] if sender and "@" in sender else "unknown.com"
         domains = world_state.get("domains", [])
         threat_intel = world_state.get("threat_intel", [])
@@ -923,6 +928,8 @@ def run_read_tool(tool_name: str, world_state: dict[str, Any], payload: dict[str
 
         return {
             "message_id": msg_id_clean,
+            "sender": sender,
+            "recipient": recipient,
             "from_header": sender or f"sender@{from_domain}",
             "reply_to": sender or f"sender@{from_domain}",
             "return_path": sender or f"sender@{from_domain}",
@@ -1283,7 +1290,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Agent Arena SupportOps Mock Simulator",
+    title="SentinelZero — AI Cyber Detective Mock Simulator",
+    description="Mock simulator providing identical contracts and evaluation feedback to the production competition server.",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -1572,9 +1580,9 @@ def render_dashboard_html(data: dict[str, Any]) -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent Arena SupportOps — Mock Debugger</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SentinelZero — AI Cyber Detective Mock Debugger</title>
 <style>
   :root {{
     --bg: #0d1117;
@@ -2393,8 +2401,9 @@ def start_task(authorization: str | None = Header(default=None)) -> TaskStartRes
 
         return TaskStartResponse(
             task_id=task_id,
-            customer_message=input_payload.get("customer_message", ""),
+            customer_message=input_payload.get("message_body") or input_payload.get("customer_message", ""),
             customer_id=input_payload.get("customer_id", ""),
+            input_payload=input_payload,
         )
     finally:
         conn.close()
@@ -2433,12 +2442,13 @@ def submit_task(
             return TaskSubmitResponse(received=True, task_id=req.task_id)
 
         gt = json.loads(row["ground_truth_privileged"])
-        exp_res = gt.get("expected_resolution")
-        must_esc = gt.get("must_escalate", False)
-        req_ev = gt.get("required_evidence", [])
+        gt_inner = gt.get("ground_truth") if isinstance(gt.get("ground_truth"), dict) else gt
+        exp_res = (gt_inner.get("verdict") or gt.get("expected_resolution") or "").strip().lower()
+        must_esc = bool(gt_inner.get("must_escalate") if "must_escalate" in gt_inner else gt.get("must_escalate", False))
+        req_ev = gt_inner.get("required_evidence") or gt.get("required_evidence") or []
 
         # Evaluation checks
-        resolution_correct = req.decision.resolution == exp_res
+        resolution_correct = (req.decision.resolution or "").strip().lower() == exp_res
         escalation_correct = req.decision.escalation_required == must_esc
         evidence_set = set(req.evidence)
         missing_evidence = [e for e in req_ev if e not in evidence_set]
@@ -2588,7 +2598,8 @@ def start_submission(authorization: str | None = Header(default=None)) -> Submis
                     TaskStartResponse(
                         task_id=tid,
                         customer_id=inp.get("customer_id", ""),
-                        customer_message=inp.get("customer_message", ""),
+                        customer_message=inp.get("message_body") or inp.get("customer_message", ""),
+                        input_payload=inp,
                     )
                 )
 
@@ -2647,11 +2658,12 @@ def submit_submission_batch(
             if not meta:
                 continue
             inp, gt = meta
-            exp_res = gt.get("expected_resolution")
-            must_esc = gt.get("must_escalate", False)
-            req_ev = gt.get("required_evidence", [])
+            gt_inner = gt.get("ground_truth") if isinstance(gt.get("ground_truth"), dict) else gt
+            exp_res = (gt_inner.get("verdict") or gt.get("expected_resolution") or "").strip().lower()
+            must_esc = bool(gt_inner.get("must_escalate") if "must_escalate" in gt_inner else gt.get("must_escalate", False))
+            req_ev = gt_inner.get("required_evidence") or gt.get("required_evidence") or []
 
-            resolution_correct = item.decision.resolution == exp_res
+            resolution_correct = (item.decision.resolution or "").strip().lower() == exp_res
             escalation_correct = item.decision.escalation_required == must_esc
             ev_set = set(item.evidence)
             missing_ev = [e for e in req_ev if e not in ev_set]

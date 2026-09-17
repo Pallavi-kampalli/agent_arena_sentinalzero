@@ -1,10 +1,10 @@
-"""Agent Arena SupportOps - Full Competition Rehearsal Script.
+"""SentinelZero — Full Competition Rehearsal Script.
 
 Executes a realistic multi-team rehearsal against the live production deployment:
 - Generates unique REHEARSAL_RUN_ID
 - Registers 3 independent teams (Alpha/Expert, Beta/Intermediate, Gamma/Naive)
 - Configures live settings via Admin API
-- Exercises tasks across SupportOps families and non-normal variants
+- Exercises tasks across SentinelZero threat families and non-normal variants
 - Runs ReferenceSolver vs Intermediate vs Naive agents
 - Gathers submissions, finalizes, triggers scoring
 - Validates 4-tier score separation: Score(Alpha) > Score(Beta) > Score(Gamma)
@@ -28,159 +28,70 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
 sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
 
+import agent  # noqa: E402
 from sdk.tools_client import ToolsClient  # noqa: E402
 from agent_arena.config import get_config  # noqa: E402
 
 
 def solve_expert(task: dict[str, Any], tools: ToolsClient) -> dict[str, Any]:
-    """Expert agent: actively inspects customer records, transactions, policies, and takes authorized actions."""
-    customer_id = task.get("customer_id", "")
-    message = task.get("customer_message", "").lower()
-
-    evidence: list[str] = []
-    uncertainties: list[str] = []
-
-    try:
-        cust_resp = tools.get_customer(customer_id)
-        if "customer" in cust_resp and "id" in cust_resp["customer"]:
-            evidence.append(cust_resp["customer"]["id"])
-    except Exception as e:
-        uncertainties.append(f"Failed to fetch customer: {e}")
-
-    transactions = []
-    try:
-        tx_resp = tools.get_transactions(customer_id)
-        transactions = tx_resp.get("transactions", [])
-        for tx in transactions[:3]:
-            if "id" in tx:
-                evidence.append(tx["id"])
-    except Exception as e:
-        uncertainties.append(f"Failed to fetch transactions: {e}")
-
-    try:
-        search_resp = tools.search_knowledge("refund duplicate cancellation policy", top_k=3)
-        results = search_resp.get("results", [])
-        if results:
-            policy_doc_id = results[0]["id"]
-            evidence.append(policy_doc_id)
-            doc_resp = tools.get_document(policy_doc_id)
-            if "document" in doc_resp and "id" in doc_resp["document"]:
-                evidence.append(doc_resp["document"]["id"])
-    except Exception as e:
-        uncertainties.append(f"Failed to retrieve policy document: {e}")
-
-    category = "billing"
-    issue = "general_inquiry"
-    severity = "medium"
-
-    if "duplicate" in message or "charged twice" in message:
-        issue = "duplicate_payment"
-    elif "cancel" in message:
-        category = "account"
-        issue = "subscription_cancellation"
-    elif "fraud" in message or "unauthorized" in message:
-        category = "security"
-        issue = "fraud_suspicion"
-        severity = "high"
-    elif "refund" in message:
-        issue = "refund_request"
-
-    resolution = "deny"
-    escalation_required = False
-    customer_response = "Thank you for reaching SupportOps. We have reviewed your account details."
-
-    if issue in ("duplicate_payment", "refund_request") and transactions:
-        target_tx = transactions[0]
-        tx_id = target_tx.get("id")
-        amount = float(target_tx.get("amount", 0.0))
-        try:
-            res = tools.issue_refund(transaction_id=tx_id, amount=amount, reason="Customer requested refund")
-            if res.get("status") == "success":
-                resolution = "refund"
-                if "transaction" in res and "id" in res["transaction"]:
-                    evidence.append(res["transaction"]["id"])
-            elif res.get("error") == "INELIGIBLE":
-                if res.get("reason") == "chargeback_investigation_active":
-                    escalation_required = True
-                    resolution = "escalate"
-                else:
-                    resolution = "deny"
-        except Exception:
-            resolution = "deny"
-
-    return {
-        "case_classification": {"category": category, "issue": issue, "severity": severity},
-        "decision": {"resolution": resolution, "escalation_required": escalation_required},
-        "evidence": list(set(evidence)),
-        "uncertainties": uncertainties,
-        "customer_response": customer_response,
-        "confidence": 0.95,
-    }
+    """Expert agent: uses SentinelZero reference agent solver."""
+    return agent.solve(task, tools)
 
 
 def solve_naive(task: dict[str, Any], tools: ToolsClient) -> dict[str, Any]:
-    """Naive baseline agent: zero tool calls, fixed boilerplate response conforming to Section 7 schema."""
+    """Naive baseline agent: zero tool calls, fixed baseline response."""
     return {
         "case_classification": {
-            "category": "general",
-            "issue": "other",
+            "category": "legitimate",
+            "issue": "normal_email",
             "severity": "low",
         },
         "decision": {
-            "resolution": "deny",
+            "resolution": "allow",
             "escalation_required": False,
         },
         "evidence": [],
         "uncertainties": ["Automated baseline agent - no actions taken."],
-        "customer_response": "Thank you for contacting customer support. We are reviewing your inquiry.",
+        "customer_response": "SentinelZero baseline analysis complete.",
         "confidence": 0.50,
     }
 
 
 def solve_intermediate(task: dict[str, Any], tools: ToolsClient) -> dict[str, Any]:
-    """Intermediate agent: looks up customer and searches knowledge base, basic decision heuristic."""
-    customer_id = task.get("customer_id", "")
-    message = task.get("customer_message", "").lower()
-
+    """Intermediate agent: looks up approved domains and message headers, basic heuristic."""
+    message_id = task.get("message_id", "")
     evidence: list[str] = []
     uncertainties: list[str] = []
 
     try:
-        cust_resp = tools.get_customer(customer_id)
-        if "customer" in cust_resp and "id" in cust_resp["customer"]:
-            evidence.append(cust_resp["customer"]["id"])
+        app_resp = tools.get_approved_domains()
+        if isinstance(app_resp, dict):
+            for d in app_resp.get("official_domains", []):
+                evidence.append(d)
     except Exception as e:
-        uncertainties.append(f"Failed to fetch customer: {e}")
+        uncertainties.append(f"Failed to fetch approved domains: {e}")
 
-    try:
-        search_resp = tools.search_knowledge("support inquiry policy", top_k=2)
-        for doc in search_resp.get("results", [])[:2]:
-            if "id" in doc:
-                evidence.append(doc["id"])
-    except Exception as e:
-        uncertainties.append(f"Failed to search knowledge: {e}")
-
-    resolution = "deny"
-    escalation_required = False
-    if "fraud" in message or "unauthorized" in message:
-        resolution = "escalate"
-        escalation_required = True
-    elif "cancel" in message:
-        resolution = "deny"
+    if message_id:
+        try:
+            h_resp = tools.get_email_headers(message_id)
+            if isinstance(h_resp, dict) and h_resp.get("message_id"):
+                evidence.append(h_resp["message_id"])
+        except Exception as e:
+            uncertainties.append(f"Failed to fetch headers: {e}")
 
     return {
         "case_classification": {
-            "category": "general",
-            "issue": "general_inquiry",
+            "category": "phishing",
+            "issue": "suspicious_link",
             "severity": "medium",
         },
         "decision": {
-            "resolution": resolution,
-            "escalation_required": escalation_required,
+            "resolution": "warn",
+            "escalation_required": False,
         },
         "evidence": list(set(evidence)),
         "uncertainties": uncertainties,
-        "customer_response": "Thank you for contacting SupportOps. We have reviewed your request.",
+        "customer_response": "SentinelZero intermediate analysis complete.",
         "confidence": 0.75,
     }
 
@@ -192,7 +103,7 @@ def main() -> None:
     admin_headers = {"X-Admin-Secret": admin_secret, "Content-Type": "application/json"}
 
     print("=" * 80)
-    print(" AGENT ARENA SUPPORT-OPS — FULL SYSTEM REHEARSAL")
+    print(" SENTINELZERO — FULL SYSTEM REHEARSAL")
     print(f" Run ID:   {rehearsal_run_id}")
     print(f" Target:   {base_url}")
     print(f" Time:     {datetime.now(UTC).isoformat()}")

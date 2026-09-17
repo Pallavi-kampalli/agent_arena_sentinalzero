@@ -18,14 +18,14 @@ total_mutations = 6
 # Mutation 1: Team Isolation Bypass (cross-team runtime state leakage)
 # -----------------------------------------------------------------------------
 print("\n[Mutation 1] Cross-team runtime state leakage...")
-world_template = {"transactions": [{"id": "TXN-SHARED", "refunded_amount": 0.0, "refund_status": "none"}]}
+world_template = {"actions_taken": [], "quarantined": False}
 
 team_a_world = copy.deepcopy(world_template)
 team_b_world = copy.deepcopy(world_template)
 
-# Team A issues refund
-team_a_world["transactions"][0]["refunded_amount"] = 50.0
-team_a_world["transactions"][0]["refund_status"] = "partially_refunded"
+# Team A quarantines message
+team_a_world["quarantined"] = True
+team_a_world["actions_taken"].append("quarantine_message")
 
 
 # Buggy resolver returns Team A's state when Team B queries
@@ -36,8 +36,8 @@ def buggy_resolve_assignment(team_id: str):
 mutated_team_b_world = buggy_resolve_assignment("team-b")
 
 try:
-    assert mutated_team_b_world["transactions"][0]["refunded_amount"] == 0.0, (
-        f"Cross-team leakage! Team B observed Team A's refund: {mutated_team_b_world['transactions'][0]['refunded_amount']}"
+    assert mutated_team_b_world["quarantined"] is False, (
+        f"Cross-team leakage! Team B observed Team A's quarantine state: {mutated_team_b_world['quarantined']}"
     )
     print("FAILED: Mutation 1 was not detected!")
 except AssertionError as e:
@@ -124,36 +124,28 @@ except AssertionError as e:
     passed_mutations += 1
 
 # -----------------------------------------------------------------------------
-# Mutation 4: Concurrency Race / Double Refund Bypass
+# Mutation 4: Concurrency Race / Double Action Bypass
 # -----------------------------------------------------------------------------
-print("\n[Mutation 4] Concurrency race condition permits double refund...")
+print("\n[Mutation 4] Concurrency race condition permits double action...")
 
 
-# Mutated tool execution that does not serialize checks against state
-def buggy_concurrent_refund_processor(transaction_record, requests):
+def buggy_concurrent_action_processor(message_record, requests):
     successes = []
-    rejections = []
     for req in requests:
-        # Buggy: does not lock and does not check freshly mutated status
-        if transaction_record["refund_status"] == "none":
-            transaction_record["refunded_amount"] += req["amount"]
-            successes.append({"status": "refunded"})
-            # Flaw: status not updated synchronously under race
-        else:
-            rejections.append({"error": "INELIGIBLE"})
-    return successes, rejections
+        if not message_record["quarantined"]:
+            message_record["quarantined"] = True
+            successes.append({"status": "quarantined"})
+    return successes
 
 
-# Simulate two simultaneous calls
-txn = {"id": "TXN-RACE", "amount": 100.0, "refunded_amount": 0.0, "refund_status": "none"}
-requests = [{"amount": 100.0}, {"amount": 100.0}]
+msg_rec = {"id": "MSG-RACE", "quarantined": False}
+requests = [{"action": "quarantine"}, {"action": "quarantine"}]
 
-# Buggy processor lets both succeed
-buggy_successes = [{"status": "refunded"}, {"status": "refunded"}]
+buggy_successes = [{"status": "quarantined"}, {"status": "quarantined"}]
 
 try:
     assert len(buggy_successes) == 1, (
-        f"Concurrency race allowed double refund! Success count: {len(buggy_successes)} != 1"
+        f"Concurrency race allowed double action! Success count: {len(buggy_successes)} != 1"
     )
     print("FAILED: Mutation 4 was not detected!")
 except AssertionError as e:

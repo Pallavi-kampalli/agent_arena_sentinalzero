@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT_DIR / "src"))
 sys.path.insert(0, str(ROOT_DIR / "starter-kit"))
 sys.path.insert(0, str(ROOT_DIR))
 
-import agent
+from agent_arena.agent import sentinelzero_agent as agent
 from agent_arena.services.dataset_service import DATA_DIR, load_canonical_tasks
 
 

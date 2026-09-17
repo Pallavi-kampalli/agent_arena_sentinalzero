@@ -96,7 +96,7 @@ def test_sdk_raises_api_error_on_http_failure():
     client._client = mock_httpx
 
     with pytest.raises(ApiError) as exc_info:
-        client.get_customer("CUS-NONEXISTENT")
+        client.lookup_directory("EMP-NONEXISTENT")
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail["error"] == "NOT_FOUND"
 

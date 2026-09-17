@@ -21,7 +21,7 @@ def extract_observed_evidence_from_logs(
         observed.add(initial_customer_id)
 
     id_pattern = re.compile(
-        r"\b(DOC-[A-Za-z0-9_-]+|TXN-[A-Za-z0-9_-]+|CUS-[A-Za-z0-9_-]+|SUB-[A-Za-z0-9_-]+|CASE-[A-Za-z0-9_-]+)\b"
+        r"\b(EMP-[A-Za-z0-9_-]+|DOM-[A-Za-z0-9_-]+|POL-[A-Za-z0-9_-]+|THR-[A-Za-z0-9_-]+|LOG-[A-Za-z0-9_-]+|MSG-[A-Za-z0-9_-]+|TASK-[A-Za-z0-9_-]+|DOC-[A-Za-z0-9_-]+|TXN-[A-Za-z0-9_-]+|CUS-[A-Za-z0-9_-]+|SUB-[A-Za-z0-9_-]+|CASE-[A-Za-z0-9_-]+)\b"
     )
 
     for log in tool_logs:

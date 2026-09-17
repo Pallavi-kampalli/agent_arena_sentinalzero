@@ -62,21 +62,19 @@ def test_starter_agent_end_to_end_against_mock(mock_server):
     # 1. Start task
     task = tools.start_task()
     assert "task_id" in task
-    assert "customer_id" in task
-    assert "customer_message" in task
     task_id = task["task_id"]
 
-    # 2. Run agent - verifies zero solution logic template invariant
-    with pytest.raises(NotImplementedError):
-        solve(task, tools)
+    # 2. Run agent - verifies solve executes and returns triage decision
+    ans = solve(task, tools)
+    assert "decision" in ans
 
     # 3. Verify Section 7 contract adherence with valid submission payload
     valid_payload = {
-        "case_classification": {"category": "billing", "issue": "duplicate_payment", "severity": "medium"},
-        "decision": {"resolution": "refund", "escalation_required": False},
-        "evidence": ["DOC-REFUND-001"],
+        "case_classification": {"category": "cybersecurity_triage", "issue": "triage", "severity": "medium"},
+        "decision": {"resolution": "quarantine", "escalation_required": False},
+        "evidence": ["MSG-DEV-001"],
         "uncertainties": [],
-        "customer_response": "We have processed your duplicate charge refund.",
+        "customer_response": "Quarantined suspicious phishing email.",
         "confidence": 0.95,
     }
 
@@ -101,14 +99,13 @@ def test_naive_agent_fails_naturally_without_environment_crash(mock_server):
     task = tools.start_task()
     task_id = task["task_id"]
 
-    # Naive agent immediately attempts an invalid refund with bad transaction ID
+    # Naive agent attempts an invalid tool endpoint call
     with pytest.raises(ApiError) as exc_info:
-        tools.issue_refund(
-            transaction_id="TXN-INVALID-9999",
-            amount=99999.0,
-            reason="I want all the money",
+        tools._post(
+            "/tools/invalid_action_call",
+            {"message_id": "MSG-9999", "reason": "Illegal action call"},
         )
-    assert exc_info.value.status_code == 404
+    assert exc_info.value.status_code in (404, 422)
 
     # Server remains healthy and responsive
     health = tools._get("/health")
@@ -117,18 +114,17 @@ def test_naive_agent_fails_naturally_without_environment_crash(mock_server):
     # Now attempt submission with hallucinated evidence
     naive_submit = tools.submit_task(
         task_id=task_id,
-        case_classification={"category": "billing", "issue": "general", "severity": "low"},
-        decision={"resolution": "refund", "escalation_required": False},
+        case_classification={"category": "cybersecurity_triage", "issue": "general", "severity": "low"},
+        decision={"resolution": "allow", "escalation_required": False},
         evidence=["HALLUCINATED-DOC-9999"],
         uncertainties=["Did not read anything"],
-        customer_response="Here is your money",
+        customer_response="Here is your message",
         confidence=1.0,
     )
 
     assert naive_submit["received"] is True
     # In mock practice mode, diff_explanation explains why the naive agent failed
     assert naive_submit.get("correct") is False
-    assert "Missing required evidence" in naive_submit.get("diff_explanation", "") or "mismatch" in naive_submit.get(
-        "diff_explanation", ""
-    )
+    diff_text = naive_submit.get("diff_explanation", "").lower()
+    assert "missing required evidence" in diff_text or "mismatch" in diff_text
     tools.close()

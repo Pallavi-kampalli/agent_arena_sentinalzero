@@ -13,13 +13,6 @@ def load_dev_task_count() -> int:
     return 30
 
 
-def load_canonical_dev_tasks(mock_data_dir: Path) -> list[dict[str, Any]]:
-    """Loads canonical dev tasks from mock_data/."""
-    sys.path.insert(0, str(mock_data_dir))
-    from sync_mock_data import build_dev_tasks
-    return build_dev_tasks(mock_data_dir)
-
-
 def extract_domain_rules_code() -> str:
     """Extracts canonical domain logic from src/agent_arena/domain/rules.py and models.py."""
     rules_path = ROOT_DIR / "src" / "agent_arena" / "domain" / "rules.py"
@@ -101,11 +94,11 @@ def main() -> None:
     required_files = [
         "tasks.json",
         "ground_truth.json",
-        "customers.json",
-        "transactions.json",
-        "subscriptions.json",
-        "policies.json",
-        "previous_cases.json",
+        "directory.json",
+        "domains.json",
+        "threat_intel.json",
+        "security_policies.json",
+        "historical_threats.json",
     ]
 
     for fname in required_files:
@@ -119,21 +112,24 @@ def main() -> None:
             server_content = f.read()
 
         start_marker = "# =============================================================================\n# GENERATED FROM src/agent_arena/domain/rules.py & models.py"
-        end_marker = "# END GENERATED DOMAIN SECTION\n# ============================================================================="
+        end_marker = "# =============================================================================\n# END GENERATED DOMAIN SECTION\n# ============================================================================="
 
         if start_marker in server_content and end_marker in server_content:
             before = server_content[: server_content.find(start_marker)]
             after = server_content[server_content.find(end_marker) + len(end_marker) :]
             new_server_content = before + domain_block + after
 
+            server_content_norm = server_content.replace("\r\n", "\n")
+            new_server_content_norm = new_server_content.replace("\r\n", "\n")
+
             if args.check:
-                if server_content != new_server_content:
+                if server_content_norm != new_server_content_norm:
                     print(f"ERROR: {server_file} domain section is stale relative to src/agent_arena/domain/rules.py.")
                     sys.exit(1)
                 print(f"PASS: {server_file} domain rules are up to date.")
             else:
-                with open(server_file, "w", encoding="utf-8") as f:
-                    f.write(new_server_content)
+                with open(server_file, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(new_server_content_norm)
                 print(f"Synchronized canonical domain rules in {server_file}")
         else:
             if args.check:
@@ -143,18 +139,6 @@ def main() -> None:
         if args.check:
             print(f"ERROR: {server_file} does not exist.")
             sys.exit(1)
-
-    # 3. Mirror copy of starter kit to participant directory (export only, no tests)
-    participant_dir = ROOT_DIR.parent / "agent_arena_participant"
-    if participant_dir.exists() and not args.check:
-        import shutil
-        shutil.copytree(
-            starter_kit_dir,
-            participant_dir,
-            dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.db", ".venv", ".git", ".pytest_cache", ".env"),
-        )
-        print(f"Synchronized starter-kit copy to {participant_dir}")
 
 
 if __name__ == "__main__":

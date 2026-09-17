@@ -102,23 +102,15 @@ def check_escalation_validity(
     )
 
 
-def check_refund_eligibility(
-    world_state: dict[str, Any],
-    transaction_id: str,
-    amount: float,
-    reason: str,
-) -> EligibilityResult:
-    """Legacy compatibility helper."""
+def check_refund_eligibility(*args: Any, **kwargs: Any) -> EligibilityResult:
+    """Legacy stub."""
     return EligibilityResult(is_eligible=False, error="UNKNOWN_ACTION", reason="SupportOps actions are disabled")
 
 
-def check_cancellation_eligibility(
-    world_state: dict[str, Any],
-    customer_id: str,
-    subscription_id: str,
-) -> EligibilityResult:
-    """Legacy compatibility helper."""
+def check_cancellation_eligibility(*args: Any, **kwargs: Any) -> EligibilityResult:
+    """Legacy stub."""
     return EligibilityResult(is_eligible=False, error="UNKNOWN_ACTION", reason="SupportOps actions are disabled")
+
 
 
 def detect_prompt_injection(message_body: str) -> bool:

@@ -160,36 +160,6 @@ class ToolsClient:
         """Escalates the incident to human Tier-2 SOC review (ESCALATE decision)."""
         return self._post("/tools/escalate_to_tier2_soc", {"message_id": message_id, "reason": reason})
 
-    # Legacy alias methods for backwards compatibility
-    def search_knowledge(self, query: str, top_k: int = 5) -> dict[str, Any]:
-        return self.get_approved_domains()
-
-    def get_document(self, document_id: str) -> dict[str, Any]:
-        return self.lookup_directory(document_id)
-
-    def get_customer(self, customer_id: str) -> dict[str, Any]:
-        return self.lookup_directory(customer_id)
-
-    def get_transactions(self, customer_id: str, **kwargs: Any) -> dict[str, Any]:
-        return {"transactions": []}
-
-    def get_subscription(self, customer_id: str) -> dict[str, Any]:
-        return {"subscription": None}
-
-    def get_previous_cases(self, customer_id: str, **kwargs: Any) -> dict[str, Any]:
-        return {"cases": []}
-
-    def issue_refund(self, **kwargs: Any) -> dict[str, Any]:
-        return {"status": "ineligible"}
-
-    def cancel_subscription(self, **kwargs: Any) -> dict[str, Any]:
-        return {"status": "ineligible"}
-
-    def escalate_case(self, case_id: str, team: str, reason: str) -> dict[str, Any]:
-        return self.escalate_to_tier2_soc(case_id, reason)
-
-    def request_verification(self, customer_id: str, **kwargs: Any) -> dict[str, Any]:
-        return {"status": "requested"}
 
     def _get(self, path: str) -> dict[str, Any]:
         try:

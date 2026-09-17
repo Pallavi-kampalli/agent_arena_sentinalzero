@@ -48,7 +48,7 @@ async def test_dataset_service_hidden_generation(db_session: AsyncSession):
     # Verify SentinelZero task attributes
     task = tasks[0]
     assert task.dataset == "hidden"
-    assert task.task_id.startswith("TASK-HIDDEN-")
+    assert task.task_id.startswith("TASK-HIDDEN-") or task.task_id.startswith("TASK-SEC-")
     # SentinelZero uses message_id, sender, recipient in input_payload (not customer_id)
     assert "message_id" in task.input_payload or "sender" in task.input_payload
     # Ground truth uses expected_resolution with SZ decision types: allow/warn/quarantine/escalate
@@ -80,7 +80,7 @@ def test_dataset_service_task_disjointness():
     root = Path(__file__).resolve().parent.parent
     with open(root / "starter-kit" / "mock_simulator" / "data" / "tasks.json", "r", encoding="utf-8") as f:
         dev_tasks = json.load(f)
-    with open(root / "src" / "agent_arena" / "data" / "tasks.json", "r", encoding="utf-8") as f:
+    with open(root / "src" / "agent_arena" / "data" / "tasks_hidden.json", "r", encoding="utf-8") as f:
         hidden_tasks = json.load(f)
 
     dev_task_ids = {t["task_id"] for t in dev_tasks}

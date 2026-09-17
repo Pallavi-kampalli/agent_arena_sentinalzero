@@ -177,12 +177,19 @@ class SentinelZeroTaskEvaluator:
         summary = payload.get("customer_response") or payload.get("summary") or ""
         confidence_raw = payload.get("confidence", 0.5)
 
-        # Ground truth fields
+        # Ground truth fields (supports both flat schema and nested ground_truth object)
         gt = ground_truth or {}
-        expected_res = (gt.get("expected_resolution") or "").strip().lower()
-        must_escalate = bool(gt.get("must_escalate", False))
-        required_evidence = gt.get("required_evidence", [])
-        expected_action = gt.get("expected_action", {})
+        gt_inner = gt.get("ground_truth") if isinstance(gt.get("ground_truth"), dict) else gt
+
+        raw_verdict = gt_inner.get("verdict") or gt.get("expected_resolution") or ""
+        expected_res = str(raw_verdict).strip().lower()
+
+        must_escalate = bool(gt_inner.get("must_escalate") if "must_escalate" in gt_inner else gt.get("must_escalate", False))
+        required_evidence = gt_inner.get("required_evidence") or gt.get("required_evidence") or []
+
+        expected_action = gt.get("expected_action") or {}
+        if not expected_action and gt_inner.get("recommended_action"):
+            expected_action = {"tool": gt_inner.get("recommended_action")}
         expected_action_tool = expected_action.get("tool", "") if isinstance(expected_action, dict) else ""
         expected_msg_id = (expected_action.get("params") or {}).get("message_id") if isinstance(expected_action, dict) else None
 
