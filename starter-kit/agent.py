@@ -1,8 +1,8 @@
-"""SentinelZero — AI Cyber Detective Participant Agent Implementation.
+"""SentinelZero — AI Cyber Detective Participant Agent Implementation Template.
 
 This module is the starting template for participants competing in SentinelZero.
-Your goal is to investigate suspicious communication threads using the 9 SentinelZero
-read and defensive action tools and determine the defensive triage decision:
+Your goal is to investigate suspicious inbound communications, correlate security signals,
+and determine the defensive triage decision:
     ALLOW, WARN, QUARANTINE, or ESCALATE.
 
 Contract:
@@ -23,56 +23,76 @@ def solve(
 ) -> dict[str, Any]:
     """Participant agent entry point.
 
-    task:
-        The task supplied by SentinelZero:
-        - 'task_id': unique identifier for the assigned task
-        - 'customer_id': employee / recipient user identifier
-        - 'customer_message': raw subject and email/message body to investigate
+    Args:
+        task: The assigned task dictionary containing:
+            - 'task_id': unique identifier for the assigned task instance
+            - 'customer_id': employee / recipient user identifier
+            - 'customer_message': formatted headers and message body to investigate
+            - 'input_payload': raw message dict (message_id, thread_id, sender_email, etc.)
 
-    tools:
-        ToolsClient exposing all 9 participant-facing SentinelZero tools:
-        Read tools (investigation):
-            - tools.lookup_directory(identifier)
-            - tools.get_approved_domains()
-            - tools.get_email_headers(message_id)
-            - tools.inspect_domain_reputation(domain)
-            - tools.get_thread_history(thread_id)
-        Action tools (server-side enforced defensive actions):
-            - tools.allow_and_deliver(message_id, reason)
-            - tools.apply_warning_banner(message_id, banner_type, reason)
-            - tools.quarantine_message(message_id, reason)
-            - tools.escalate_to_tier2_soc(message_id, reason)
+        tools: ToolsClient exposing all 9 participant-facing SentinelZero tools:
+            Read Tools (Cybersecurity Investigation):
+                - tools.lookup_directory(identifier: str)
+                - tools.get_approved_domains()
+                - tools.get_email_headers(message_id: str)
+                - tools.inspect_domain_reputation(domain: str)
+                - tools.get_thread_history(thread_id: str)
 
-    api_key:
-        Active Google GenAI API key selected via round-robin rotation from .env.
+            Action Tools (Server-Side Enforced Defensive Actions):
+                - tools.allow_and_deliver(message_id: str, reason: str)
+                - tools.apply_warning_banner(message_id: str, banner_type: str, reason: str)
+                - tools.quarantine_message(message_id: str, reason: str)
+                - tools.escalate_to_tier2_soc(message_id: str, reason: str)
 
-    model:
-        Target LLM model name (defaults to GEMINI_MODEL in .env or 'gemini-3.5-flash-lite').
+        api_key: Active Google Gemini API key selected via round-robin rotation from .env.
+        model: Target LLM model name (defaults to GEMINI_MODEL in .env or 'gemini-3.5-flash-lite').
+        base_url: Optional custom base URL for Gemini / Google API gateway.
 
-    base_url:
-        Optional custom base URL for Google / Gemini endpoint (from GEMINI_BASE_URL in .env).
-
-    Participants are responsible for deciding:
-        - which tools to use to gather evidence (EMP-*, DOM-*, MSG-*, THR-*, POL-*, LOG-*)
-        - how to analyze impersonation, phishing, spoofing, or prompt injection
-        - which defensive action to trigger via action tools
-        - what final response to submit per Section 7 output contract:
-            {
-                "case_classification": {
-                    "category": "cybersecurity_triage",
-                    "issue": "phishing | impersonation | prompt_injection | legitimate",
-                    "severity": "low | medium | high | critical"
-                },
-                "decision": {
-                    "resolution": "allow | warn | quarantine | escalate",
-                    "escalation_required": False | True
-                },
-                "evidence": ["DOM-...", "EMP-..."],
-                "uncertainties": [],
-                "customer_response": "Action explanation and guidance for the user.",
-                "confidence": 0.95
-            }
+    Returns:
+        Structured dictionary matching the Section 7 Output Contract:
+        {
+            "case_classification": {
+                "category": "phishing",        # 'phishing' | 'impersonation' | 'credential_harvesting' | 'malware' | 'prompt_injection' | 'legitimate'
+                "issue": "spoofed_sender",     # Specific incident description
+                "severity": "high"             # 'low' | 'medium' | 'high' | 'critical'
+            },
+            "decision": {
+                "resolution": "quarantine",    # 'allow' | 'warn' | 'quarantine' | 'escalate'
+                "escalation_required": False   # bool: True if Tier 2 SOC escalation required
+            },
+            "evidence": [                      # List of entity/document IDs observed during tool calls
+                "MSG-HIDDEN-001",
+                "DOM-MALICIOUS-004",
+                "EMP-1002"
+            ],
+            "uncertainties": [],               # List of string doubts or gaps in evidence
+            "customer_response": (             # Clear, actionable security advice for the recipient
+                "This email originated from an unauthorized lookalike domain with failed SPF authentication. "
+                "The email has been quarantined. Do not open attachments or click links."
+            ),
+            "confidence": 0.95                 # float: calibrated confidence between 0.0 and 1.0
+        }
     """
+    _ = api_key, model, base_url
+
+    # Step 1: Extract task parameters
+    task_id = str(task.get("task_id", ""))
+    input_payload = task.get("input_payload") or {}
+    message_id = str(input_payload.get("message_id", ""))
+    sender_email = str(input_payload.get("sender_email", ""))
+
+    # Step 2: Implement your investigation and tool execution logic here
+    # Example:
+    # headers = tools.get_email_headers(message_id)
+    # approved = tools.get_approved_domains()
+    # rep = tools.inspect_domain_reputation(sender_email.split("@")[-1])
+
+    # Step 3: Implement defensive triage rules and take server-enforced action tool
+    # Example:
+    # tools.quarantine_message(message_id=message_id, reason="Malicious spoofed domain")
+
+    # Step 4: Return structured response matching Section 7 output contract
     raise NotImplementedError(
-        "Participant agent logic not implemented. Implement your agent investigation and triage logic in starter-kit/agent.py"
+        "Participant agent logic not implemented. "
+        "Implement your autonomous investigation, tool actions, and decision in starter-kit/agent.py."
     )
