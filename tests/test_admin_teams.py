@@ -49,7 +49,7 @@ async def test_admin_create_team_success_and_env_snippet(client: AsyncClient, ad
 
     assert data["team_name"] == "CyberDynasty"
     assert "token" in data
-    assert len(data["token"]) > 20
+    assert len(data["token"]) == 8
     assert "env_snippet" in data
     assert f"SUBMISSION_TEAM_ID={data['team_id']}" in data["env_snippet"]
     assert f"SUBMISSION_BEARER_TOKEN={data['token']}" in data["env_snippet"]

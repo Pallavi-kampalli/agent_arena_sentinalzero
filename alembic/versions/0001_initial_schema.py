@@ -135,8 +135,20 @@ def upgrade() -> None:
     op.create_index("ix_settings_audit_log_key", "settings_audit_log", ["key"])
     op.create_index("ix_settings_audit_log_changed_at", "settings_audit_log", ["changed_at"])
 
+    # 8. revoked_tokens table
+    op.create_table(
+        "revoked_tokens",
+        sa.Column("id", sa.BigInteger().with_variant(sa.Integer, "sqlite"), primary_key=True, autoincrement=True),
+        sa.Column("token_hash", sa.Text(), nullable=False),
+        sa.Column("team_id", PortableUUID, sa.ForeignKey("teams.team_id", ondelete="CASCADE"), nullable=False),
+        sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=False),
+    )
+    op.create_index("ix_revoked_tokens_token_hash", "revoked_tokens", ["token_hash"], unique=True)
+    op.create_index("ix_revoked_tokens_team_id", "revoked_tokens", ["team_id"])
+
 
 def downgrade() -> None:
+    op.drop_table("revoked_tokens")
     op.drop_table("settings_audit_log")
     op.drop_table("settings")
     op.drop_table("tool_call_logs")

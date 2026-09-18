@@ -32,3 +32,22 @@ class Team(Base):
     # Relationships
     submissions = relationship("Submission", back_populates="team", cascade="all, delete-orphan")
     task_assignments = relationship("TaskAssignment", back_populates="team", cascade="all, delete-orphan")
+
+
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+
+    id: Mapped[int] = mapped_column(
+        sa.BigInteger().with_variant(sa.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    token_hash: Mapped[str] = mapped_column(sa.Text, nullable=False, unique=True, index=True)
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        PortableUUID,
+        sa.ForeignKey("teams.team_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    revoked_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
+

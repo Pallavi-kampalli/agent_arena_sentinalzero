@@ -120,3 +120,30 @@ async def test_expired_token(client: AsyncClient, db_session: AsyncSession):
     response = await client.get("/team/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
     assert response.json()["error"] == "TOKEN_EXPIRED"
+
+
+@pytest.mark.asyncio
+async def test_short_8_char_bearer_token_lifecycle(client: AsyncClient, db_session: AsyncSession):
+    """Verify newly registered teams receive clean 8-character bearer tokens that authenticate and revoke."""
+    team, token = await register_team(db_session, team_name="ShortTokenTeam")
+    assert len(token) == 8
+    assert token.isalnum()
+
+    # 1. Valid 8-char token authenticates
+    res_ok = await client.get("/team/me", headers={"Authorization": f"Bearer {token}"})
+    assert res_ok.status_code == 200
+    assert res_ok.json()["team_name"] == "ShortTokenTeam"
+
+    # 2. Token regeneration issues another 8-char token and invalidates the previous one
+    new_token = await regenerate_team_token(db_session, team)
+    assert len(new_token) == 8
+    assert new_token != token
+
+    # Old 8-char token fails immediately
+    res_old = await client.get("/team/me", headers={"Authorization": f"Bearer {token}"})
+    assert res_old.status_code == 401
+
+    # New 8-char token works
+    res_new = await client.get("/team/me", headers={"Authorization": f"Bearer {new_token}"})
+    assert res_new.status_code == 200
+

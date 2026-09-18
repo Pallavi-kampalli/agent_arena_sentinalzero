@@ -26,12 +26,28 @@ class AppConfig(BaseSettings):
     CORS_ORIGINS: str = "*"
     ALLOWED_HOSTS: str = "*"
     LOG_LEVEL: str = "INFO"
+    PUBLIC_ARENA_URL: str | None = None
+    NGROK_URL: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def public_arena_url(self) -> str:
+        if self.PUBLIC_ARENA_URL and self.PUBLIC_ARENA_URL.strip():
+            url = self.PUBLIC_ARENA_URL.strip()
+            if not url.startswith("http://") and not url.startswith("https://"):
+                url = f"https://{url}"
+            return url.rstrip("/")
+        if self.NGROK_URL and self.NGROK_URL.strip() and self.NGROK_URL.strip() != "your-ngrok-url":
+            url = self.NGROK_URL.strip()
+            if not url.startswith("http://") and not url.startswith("https://"):
+                url = f"https://{url}"
+            return url.rstrip("/")
+        return f"http://localhost:{self.PORT}"
 
     @property
     def cors_origins_list(self) -> list[str]:

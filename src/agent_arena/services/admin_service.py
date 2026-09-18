@@ -8,6 +8,7 @@ import sqlalchemy as sa
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent_arena.config import get_config
 from agent_arena.logging import logger
 from agent_arena.models.setting import Setting, SettingsAuditLog
 from agent_arena.models.submission import Submission
@@ -128,8 +129,9 @@ class AdminService:
             expiry_hours=int(expiry_hours) if expiry_hours is not None else None,
         )
 
+        arena_url = get_config().public_arena_url
         env_snippet = (
-            f"SUBMISSION_ARENA_URL=http://localhost:8000\n"
+            f"SUBMISSION_ARENA_URL={arena_url}\n"
             f"SUBMISSION_TEAM_ID={team.team_id}\n"
             f"SUBMISSION_TEAM_CODE={team.team_code}\n"
             f"SUBMISSION_BEARER_TOKEN={raw_token}\n"
@@ -356,8 +358,9 @@ class AdminService:
             self.session.add(audit_log)
             await self.session.commit()
 
+            arena_url = get_config().public_arena_url
             env_snippet = (
-                f"SUBMISSION_ARENA_URL=http://localhost:8000\n"
+                f"SUBMISSION_ARENA_URL={arena_url}\n"
                 f"SUBMISSION_TEAM_ID={team.team_id}\n"
                 f"SUBMISSION_TEAM_CODE={team.team_code}\n"
                 f"SUBMISSION_BEARER_TOKEN={new_raw_token}\n"
