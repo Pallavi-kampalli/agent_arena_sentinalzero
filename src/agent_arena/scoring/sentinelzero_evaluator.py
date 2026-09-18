@@ -1,7 +1,7 @@
 """SentinelZero Task Evaluator.
 
-Replaces the generic SupportOps TaskEvaluator with SentinelZero-specific
-scoring for cybersecurity triage decisions (ALLOW, WARN, QUARANTINE, ESCALATE).
+Implements SentinelZero-specific scoring for cybersecurity triage decisions
+(ALLOW, WARN, QUARANTINE, ESCALATE).
 
 SentinelZero Scoring Weights:
   task_success:  35%

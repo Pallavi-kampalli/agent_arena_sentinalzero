@@ -191,7 +191,7 @@ def sz_score_policy(
     """SentinelZero policy compliance score.
 
     Checks:
-    1. Tool enforcement compliance: 25% penalty per rejection (same as SupportOps)
+    1. Tool enforcement compliance: 25% penalty per rejection
     2. Decision-action pairing: submitted decision must map to submitted action
     3. Decision-ground-truth alignment: appropriate for the case
     """

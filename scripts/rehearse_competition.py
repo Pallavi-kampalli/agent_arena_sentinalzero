@@ -205,7 +205,7 @@ def main() -> None:
                 print(f"  + Registered {tc['name']} (ID: {data['team_id']})")
 
             # 4. Execute Realistic Submissions for Each Team
-            print(f"\n[Step 4/8] Executing {rehearsal_task_count} Tasks per Team Across SupportOps Families...")
+            print(f"\n[Step 4/8] Executing {rehearsal_task_count} Tasks per Team Across SentinelZero Incident Types...")
             team_execution_results: dict[str, dict[str, Any]] = {}
 
             for key, tinfo in registered_teams.items():

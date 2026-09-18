@@ -1,14 +1,14 @@
-# Agent Arena — SupportOps Platform
+# Agent Arena — SentinelZero Platform
 
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16--alpine-336791.svg)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
-[![Tests](https://img.shields.io/badge/Tests-195%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-283%20Passed-brightgreen.svg)]()
 
-**Agent Arena** is an enterprise-grade competition and evaluation platform designed to benchmark autonomous AI agents on complex, stateful customer support operations tasks (**SupportOps**).
+**Agent Arena** is an enterprise-grade competition and evaluation platform designed to benchmark autonomous AI agents on complex, stateful cybersecurity incident response and phishing/social engineering triage tasks (**SentinelZero**).
 
-The platform evaluates autonomous agents across **30 canonical benchmark tasks** (5 per family across 6 families) using **10 specialized read and action tools**, enforcing strict policy adherence, evidence grounding, transactional isolation, upfront task delivery with ephemeral randomized IDs, and atomic batch submission under real-time concurrency.
+The platform evaluates autonomous agents across **30 canonical benchmark tasks** using **9 specialized read and defensive action tools**, enforcing strict policy adherence, evidence grounding, transactional isolation, upfront task delivery with ephemeral randomized IDs, and atomic batch submission under real-time concurrency.
 
 ---
 
@@ -209,7 +209,7 @@ python scripts/verify_starter_kit.py
 ## 7. Competition Rehearsal & Disaster Recovery
 
 ### Full Competition Rehearsal
-Run an end-to-end competition simulation with 3 autonomous agents (Alpha/Expert, Beta/Intermediate, Gamma/Naive) across all 6 task families and 10 tools:
+Run an end-to-end competition simulation with 3 autonomous agents (Alpha/Expert, Beta/Intermediate, Gamma/Naive) across SentinelZero incident types and tools:
 ```bash
 python scripts/rehearse_competition.py
 ```

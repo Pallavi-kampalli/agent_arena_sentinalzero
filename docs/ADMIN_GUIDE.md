@@ -2,7 +2,7 @@
 
 ## 1. Overview & Architectural Role
 
-The **Admin Control Plane** (`/admin/*`) provides competition organizers and platform operators with centralized, real-time control over the Agent Arena — SupportOps platform.
+The **Admin Control Plane** (`/admin/*`) provides competition organizers and platform operators with centralized, real-time control over the Agent Arena — SentinelZero platform.
 
 The admin control plane is strictly layered on top of the core platform services (domain models, solver engine, database models, and scoring system):
 - **Zero Core Tampering:** Participant contracts (`/task/*`, `/submission/*`, `/tools/*`) and canonical scoring mathematics remain completely untouched.

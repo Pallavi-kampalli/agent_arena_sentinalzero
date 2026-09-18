@@ -1,12 +1,12 @@
-# AGENT ARENA (SUPPORTOPS) — PRODUCTION OPERATOR RUNBOOK
+# AGENT ARENA (SENTINELZERO) — PRODUCTION OPERATOR RUNBOOK
 
-This runbook is the authoritative, step-by-step operational guide for deploying, managing, monitoring, securing, troubleshooting, and concluding an Agent Arena SupportOps competition event.
+This runbook is the authoritative, step-by-step operational guide for deploying, managing, monitoring, securing, troubleshooting, and concluding an Agent Arena SentinelZero competition event.
 
 ---
 
 ## 1. System Topology & Architecture
 
-Agent Arena SupportOps operates on a containerized, self-hosted Docker Compose architecture designed for operational resilience, transactional determinism, disaster recovery, and zero data loss.
+Agent Arena SentinelZero operates on a containerized, self-hosted Docker Compose architecture designed for operational resilience, transactional determinism, disaster recovery, and zero data loss.
 
 ```
                     +------------------------------------------+
@@ -69,8 +69,8 @@ When `ENVIRONMENT="production"`, the platform enforces strict fail-closed startu
 DATABASE_URL=postgresql+psycopg://postgres:A_Very_Strong_Postgres_Password_2026@postgres:5432/agent_arena
 
 # Security Credentials (Must be >= 32 characters high-entropy, H >= 3.0 bits/char)
-ADMIN_PANEL_SECRET=k89A_mQ7zP_SupportOps_Admin_2026_SecureKey_Production!
-JWT_SIGNING_SECRET=w34T_yU9xB_SupportOps_JWT_2026_SigningSecret_Production!
+ADMIN_PANEL_SECRET=k89A_mQ7zP_SentinelZero_Admin_2026_SecureKey_Production!
+JWT_SIGNING_SECRET=w34T_yU9xB_SentinelZero_JWT_2026_SigningSecret_Production!
 
 # Network & Host Binding
 PORT=8000

@@ -1,4 +1,4 @@
-"""Agent Arena SupportOps - Disaster Recovery & Operational Recovery Verification.
+"""Agent Arena SentinelZero - Disaster Recovery & Operational Recovery Verification.
 
 Validates disaster recovery, process lifecycle resilience, and data persistence:
 1. Scenario 1: Stateless API restart resilience (zero state lost)
@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT_DIR / "src"))
 
 from backup_db import backup_database  # noqa: E402
 from restore_db import restore_database  # noqa: E402
+
 from agent_arena.config import get_config  # noqa: E402
 
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
@@ -60,7 +61,7 @@ def get_admin_stats() -> dict:
 
 def main() -> None:
     print("=" * 80)
-    print(" AGENT ARENA SUPPORT-OPS — DISASTER RECOVERY & PERSISTENCE VERIFICATION")
+    print(" AGENT ARENA SENTINELZERO — DISASTER RECOVERY & PERSISTENCE VERIFICATION")
     print(f" Target URL : {BASE_URL}")
     print(f" Timestamp  : {datetime.now(UTC).isoformat()}")
     print("=" * 80)

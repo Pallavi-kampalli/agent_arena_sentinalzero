@@ -39,8 +39,6 @@ class TaskEvaluator:
     """Orchestrates deterministic evaluation of a single task assignment.
 
     Routes all evaluation through SentinelZeroTaskEvaluator.
-    The legacy SupportOps scoring path is retained for backward compatibility
-    but is no longer the default.
     """
 
     @classmethod

@@ -122,7 +122,7 @@ POLICIES = _load_policies()
 
 
 class WorldGenerator:
-    """Generates a complete, deterministic SupportOps simulation world for testing."""
+    """Generates a complete, deterministic SentinelZero simulation world for testing."""
 
     def __init__(self, seed: int = 42):
         self.seed = seed

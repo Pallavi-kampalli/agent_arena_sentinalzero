@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agent_arena"
 version = "0.1.0"
-description = "Agent Arena SupportOps Platform"
+description = "Agent Arena SentinelZero Platform"
 authors = [{ name = "Agent Arena Team" }]
 readme = "README.md"
 requires-python = ">=3.11"

@@ -50,7 +50,7 @@ def test_production_config_fails_closed_on_invalid_settings():
         AppConfig(
             ENVIRONMENT="production",
             ADMIN_PANEL_SECRET="a" * 32,
-            JWT_SIGNING_SECRET="w34T_yU9xB_SupportOps_JWT_2026_SigningSecret!",
+            JWT_SIGNING_SECRET="w34T_yU9xB_SentinelZero_JWT_2026_SigningSecret!",
             DATABASE_URL="postgresql+psycopg://user:pass@host:5432/db",
             CORS_ORIGINS="https://example.com",
         )
@@ -59,8 +59,8 @@ def test_production_config_fails_closed_on_invalid_settings():
     with pytest.raises((ValueError, ValidationError)):
         AppConfig(
             ENVIRONMENT="production",
-            ADMIN_PANEL_SECRET="k89A_mQ7zP_SupportOps_Admin_2026_SecureKey!",
-            JWT_SIGNING_SECRET="w34T_yU9xB_SupportOps_JWT_2026_SigningSecret!",
+            ADMIN_PANEL_SECRET="k89A_mQ7zP_SentinelZero_Admin_2026_SecureKey!",
+            JWT_SIGNING_SECRET="w34T_yU9xB_SentinelZero_JWT_2026_SigningSecret!",
             DATABASE_URL="postgresql+psycopg://user:pass@host:5432/db",
             CORS_ORIGINS="*",
         )
@@ -69,8 +69,8 @@ def test_production_config_fails_closed_on_invalid_settings():
     with pytest.raises((ValueError, ValidationError)):
         AppConfig(
             ENVIRONMENT="production",
-            ADMIN_PANEL_SECRET="k89A_mQ7zP_SupportOps_Admin_2026_SecureKey!",
-            JWT_SIGNING_SECRET="w34T_yU9xB_SupportOps_JWT_2026_SigningSecret!",
+            ADMIN_PANEL_SECRET="k89A_mQ7zP_SentinelZero_Admin_2026_SecureKey!",
+            JWT_SIGNING_SECRET="w34T_yU9xB_SentinelZero_JWT_2026_SigningSecret!",
             DATABASE_URL="sqlite+aiosqlite:///prod.db",
             CORS_ORIGINS="https://example.com",
         )
@@ -78,14 +78,14 @@ def test_production_config_fails_closed_on_invalid_settings():
     # 6. Valid high-entropy configuration succeeds
     valid_cfg = AppConfig(
         ENVIRONMENT="production",
-        ADMIN_PANEL_SECRET="k89A_mQ7zP_SupportOps_Admin_2026_SecureKey!",
-        JWT_SIGNING_SECRET="w34T_yU9xB_SupportOps_JWT_2026_SigningSecret!",
+        ADMIN_PANEL_SECRET="k89A_mQ7zP_SentinelZero_Admin_2026_SecureKey!",
+        JWT_SIGNING_SECRET="w34T_yU9xB_SentinelZero_JWT_2026_SigningSecret!",
         DATABASE_URL="postgresql+psycopg://user:pass@host:5432/db",
         CORS_ORIGINS="https://arena.competition.org",
         REVEAL_GROUND_TRUTH=False,
     )
     assert valid_cfg.ENVIRONMENT == "production"
-    assert valid_cfg.ADMIN_PANEL_SECRET == "k89A_mQ7zP_SupportOps_Admin_2026_SecureKey!"
+    assert valid_cfg.ADMIN_PANEL_SECRET == "k89A_mQ7zP_SentinelZero_Admin_2026_SecureKey!"
 
 
 def test_smoke_liveness_and_readiness_endpoints(client):
