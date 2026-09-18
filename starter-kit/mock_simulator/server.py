@@ -729,6 +729,18 @@ def get_db_connection() -> sqlite3.Connection:
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='mock_tasks'")
     if not cursor.fetchone():
         init_db(conn)
+    else:
+        cursor.execute("SELECT COUNT(*) FROM mock_tasks")
+        count = cursor.fetchone()[0]
+        tasks_file = DATA_DIR / "tasks.json"
+        if tasks_file.exists():
+            try:
+                with open(tasks_file, "r", encoding="utf-8") as f:
+                    expected_count = len(json.load(f))
+                if count < expected_count:
+                    init_db(conn)
+            except Exception:
+                pass
     return conn
 
 
@@ -2815,7 +2827,10 @@ def finalize_submission(
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000"))
-    host = os.getenv("HOST", "127.0.0.1")
-    print(f"Starting Agent Arena Mock Simulator on http://{host}:{port} (REVEAL_GROUND_TRUTH={REVEAL_GROUND_TRUTH})")
-    uvicorn.run(app, host=host, port=port)
+    import argparse
+    parser = argparse.ArgumentParser(description="Agent Arena Mock Simulator")
+    parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8001")), help="Port to listen on")
+    parser.add_argument("--host", type=str, default=os.getenv("HOST", "127.0.0.1"), help="Host address to bind to")
+    args, _ = parser.parse_known_args()
+    print(f"Starting Agent Arena Mock Simulator on http://{args.host}:{args.port} (REVEAL_GROUND_TRUTH={REVEAL_GROUND_TRUTH})")
+    uvicorn.run(app, host=args.host, port=args.port)

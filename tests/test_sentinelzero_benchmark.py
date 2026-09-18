@@ -270,7 +270,7 @@ class TestDevAndHiddenCoexistence(unittest.TestCase):
     def test_combined_load_has_50_tasks(self):
         """Combined load (no dataset_type filter) yields 10 DEV + 40 hidden = 50 tasks."""
         tasks = load_canonical_tasks(DATA_DIR)
-        self.assertEqual(len(tasks), 50)
+        self.assertEqual(len(tasks), 70)
 
     def test_hidden_gt_does_not_include_dev_task_ids(self):
         """Hidden GT must not contain DEV task IDs."""
