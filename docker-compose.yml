@@ -101,10 +101,10 @@ services:
         fi
         if [ -n "$$NGROK_URL" ] && [ "$$NGROK_URL" != "your-ngrok-url" ]; then
           echo "[+] Starting ngrok HTTP tunnel to api:8000 on URL: $$NGROK_URL"
-          exec ngrok http api:8000 --url="$$NGROK_URL"
+          ngrok http api:8000 --url="$$NGROK_URL" --pooling-enabled || sleep 15
         else
           echo "[+] Starting ngrok HTTP tunnel to api:8000 (dynamic endpoint)"
-          exec ngrok http api:8000
+          ngrok http api:8000 || sleep 15
         fi
     ports:
       - "${NGROK_PORT:-4040}:4040"
