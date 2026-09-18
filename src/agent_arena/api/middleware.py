@@ -8,6 +8,8 @@ from agent_arena.db import get_session_maker
 from agent_arena.services.auth_service import authenticate_bearer_token
 
 PUBLIC_PATHS = {
+    "/",
+    "/dashboard",
     "/health",
     "/docs",
     "/redoc",
@@ -20,6 +22,7 @@ PUBLIC_PREFIXES = (
     "/redoc",
     "/openapi.json",
     "/admin",  # Admin panel has its own auth mechanism (PRD §6)
+    "/dashboard",
 )
 
 

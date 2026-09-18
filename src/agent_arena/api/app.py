@@ -51,9 +51,9 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Agent Arena — SupportOps Platform",
+        title="Agent Arena — SentinelZero Platform",
         version="0.1.0",
-        description="Production API & Evaluation Engine for SupportOps Competition",
+        description="Production API & Evaluation Engine for SentinelZero Security Incident Response Competition",
         lifespan=lifespan,
     )
 
@@ -78,6 +78,17 @@ def create_app() -> FastAPI:
     app.include_router(submission_router)
     app.include_router(task_router)
     app.include_router(admin_router)
+
+    from fastapi.responses import RedirectResponse
+
+    @app.get("/", include_in_schema=False)
+    @app.get("/admin", include_in_schema=False)
+    @app.get("/admin/", include_in_schema=False)
+    @app.get("/dashboard", include_in_schema=False)
+    @app.get("/admin/dasboard", include_in_schema=False)
+    async def redirect_to_admin_dashboard():
+        """Redirect browser root and convenience URLs directly to Admin Dashboard UI."""
+        return RedirectResponse(url="/admin/dashboard", status_code=307)
 
     return app
 
