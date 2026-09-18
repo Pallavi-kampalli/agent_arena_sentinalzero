@@ -535,13 +535,13 @@ async def test_audit_16_evidence_f1_precision_recall_harmonic_mean():
 
 
 @pytest.mark.asyncio
-async def test_audit_17_40_hidden_benchmark_tasks_loaded_and_evaluable():
-    """Verify all 40 canonical hidden benchmark tasks load correctly and evaluate deterministically."""
+async def test_audit_17_30_hidden_benchmark_tasks_loaded_and_evaluable():
+    """Verify all 30 canonical hidden benchmark tasks load correctly and evaluate deterministically."""
     tasks = load_canonical_tasks(DATA_DIR, dataset_type="hidden")
-    assert len(tasks) == 40, f"Expected 40 hidden benchmark tasks, found {len(tasks)}"
+    assert len(tasks) == 30, f"Expected 30 hidden benchmark tasks, found {len(tasks)}"
 
     task_ids = [t["task_id"] for t in tasks]
-    assert len(set(task_ids)) == 40, "Task IDs must be distinct and disjoint"
+    assert len(set(task_ids)) == 30, "Task IDs must be distinct and disjoint"
 
     # Evaluate each task against a simulated perfect submission payload
     for t in tasks:

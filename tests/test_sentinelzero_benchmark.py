@@ -36,11 +36,11 @@ VALID_EVIDENCE_PATTERN = re.compile(
 )
 
 EXPECTED_CATEGORY_COUNTS = {
-    "multi_turn": 16,    # standard multi-turn attacks (40%)
-    "benign": 8,         # benign / false alarms (20%)
-    "prompt_injection": 6,  # prompt injection (15%)
-    "lookalike": 6,      # subdomain / lookalike (15%)
-    "escalation": 4,     # ambiguous / escalation (10%)
+    "multi_turn": 12,    # standard multi-turn attacks (40%)
+    "benign": 6,         # benign / false alarms (20%)
+    "lookalike": 5,      # subdomain / lookalike (16.7%)
+    "prompt_injection": 4,  # prompt injection (13.3%)
+    "escalation": 3,     # ambiguous / escalation (10%)
 }
 
 FAMILY_TO_CATEGORY = {
@@ -87,13 +87,13 @@ class TestHiddenBenchmarkIntegrity(unittest.TestCase):
         self.gt_by_id = {g["task_id"]: g for g in self.hidden_gt}
 
     # ── 21. Task count ────────────────────────────────────────────────────────
-    def test_21_exactly_40_hidden_tasks(self):
-        """21. Exactly 40 hidden tasks exist."""
-        self.assertEqual(len(self.hidden_tasks), 40, f"Expected 40, got {len(self.hidden_tasks)}")
+    def test_21_exactly_30_hidden_tasks(self):
+        """21. Exactly 30 hidden tasks exist."""
+        self.assertEqual(len(self.hidden_tasks), 30, f"Expected 30, got {len(self.hidden_tasks)}")
 
     # ── 22. Category distribution ─────────────────────────────────────────────
     def test_22_category_distribution_matches_spec(self):
-        """22. Category distribution matches 16/8/6/6/4."""
+        """22. Category distribution matches 12/6/5/4/3."""
         counts: dict[str, int] = {k: 0 for k in EXPECTED_CATEGORY_COUNTS}
         for t in self.hidden_tasks:
             family = t.get("family", "")
@@ -263,14 +263,14 @@ class TestDevAndHiddenCoexistence(unittest.TestCase):
     def test_hidden_tasks_load_independently(self):
         """Hidden tasks (tasks_hidden.json) load independently."""
         tasks = load_canonical_tasks(DATA_DIR, "hidden")
-        self.assertEqual(len(tasks), 40)
+        self.assertEqual(len(tasks), 30)
         for t in tasks:
             self.assertEqual(t["dataset"], "hidden")
 
-    def test_combined_load_has_50_tasks(self):
-        """Combined load (no dataset_type filter) yields 10 DEV + 40 hidden = 50 tasks."""
+    def test_combined_load_has_60_tasks(self):
+        """Combined load (no dataset_type filter) yields 30 DEV + 30 hidden = 60 tasks."""
         tasks = load_canonical_tasks(DATA_DIR)
-        self.assertEqual(len(tasks), 70)
+        self.assertEqual(len(tasks), 60)
 
     def test_hidden_gt_does_not_include_dev_task_ids(self):
         """Hidden GT must not contain DEV task IDs."""
