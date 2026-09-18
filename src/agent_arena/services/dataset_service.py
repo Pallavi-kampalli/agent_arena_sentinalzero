@@ -12,6 +12,7 @@ from agent_arena.models.task import Task
 from agent_arena.services.settings_service import SettingsService
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DEV_DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "starter-kit" / "mock_simulator" / "data"
 
 
 def merge_entities_by_key(
@@ -28,17 +29,19 @@ def merge_entities_by_key(
 
 
 def load_canonical_tasks(data_dir: Path, dataset_type: str | None = None) -> list[dict[str, Any]]:
-    """Loads modular tasks, ground truth, and base entity catalogs from data_dir."""
-    files_to_load: list[tuple[str, str]] = []
+    """Loads modular tasks, ground truth, and base entity catalogs from data_dir or mock simulator."""
+    files_to_load: list[tuple[Path, str, str]] = []
     if dataset_type == "dev":
-        files_to_load = [("tasks.json", "ground_truth.json")]
+        source_dir = data_dir if (data_dir / "tasks.json").exists() else DEV_DATA_DIR
+        files_to_load = [(source_dir, "tasks.json", "ground_truth.json")]
     elif dataset_type == "hidden":
-        files_to_load = [("tasks_hidden.json", "ground_truth_hidden.json")]
+        files_to_load = [(data_dir, "tasks_hidden.json", "ground_truth_hidden.json")]
     else:
-        if (data_dir / "tasks.json").exists():
-            files_to_load.append(("tasks.json", "ground_truth.json"))
+        source_dev = data_dir if (data_dir / "tasks.json").exists() else DEV_DATA_DIR
+        if (source_dev / "tasks.json").exists():
+            files_to_load.append((source_dev, "tasks.json", "ground_truth.json"))
         if (data_dir / "tasks_hidden.json").exists():
-            files_to_load.append(("tasks_hidden.json", "ground_truth_hidden.json"))
+            files_to_load.append((data_dir, "tasks_hidden.json", "ground_truth_hidden.json"))
 
     if not files_to_load:
         raise FileNotFoundError(f"No task files found in {data_dir}")
@@ -46,9 +49,9 @@ def load_canonical_tasks(data_dir: Path, dataset_type: str | None = None) -> lis
     tasks: list[dict[str, Any]] = []
     gt_map: dict[str, dict[str, Any]] = {}
 
-    for t_fname, gt_fname in files_to_load:
-        t_path = data_dir / t_fname
-        gt_path = data_dir / gt_fname
+    for folder, t_fname, gt_fname in files_to_load:
+        t_path = folder / t_fname
+        gt_path = folder / gt_fname
         if t_path.exists():
             with open(t_path, "r", encoding="utf-8") as f:
                 tasks.extend(json.load(f))
